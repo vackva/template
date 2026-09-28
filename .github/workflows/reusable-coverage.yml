@@ -1,0 +1,174 @@
+name: coverage
+
+# Vendored from tanh-lab/ci-actions (see .github/CLAUDE.md).
+#
+# Reusable full-suite coverage leg: build a preset instrumented for clang
+# source-based coverage (the caller's preset carries the flags), run the whole
+# suite, export lcov over the shared libraries + test binaries, upload to
+# Codecov via tokenless OIDC (the Codecov GitHub App must be installed on the
+# caller's org). The codecov-action pin lives here once, by SHA.
+
+on:
+  workflow_call:
+    inputs:
+      preset:
+        description: "Instrumented CMake configure/build/test preset"
+        type: string
+        required: true
+      build_args:
+        description: "Extra configure args appended in preset mode"
+        type: string
+        default: ""
+      lib_pattern:
+        description: "find -name pattern for the instrumented shared libraries (e.g. 'libanira.so*')"
+        type: string
+        required: true
+      ignore_regex:
+        description: "llvm-cov -ignore-filename-regex for fetched/generated code"
+        type: string
+        default: "(^|/)(build|modules|extras|test|examples|_deps)/"
+      models_cache_prefix:
+        description: "Cache-key prefix for pre-fetched fixture trees; the full key is <prefix>-hashFiles(models_hash_glob). Empty skips the restore. (hashFiles is step-scoped, so callers cannot compute the key themselves.)"
+        type: string
+        default: ""
+      models_hash_glob:
+        description: "File pattern hashed into the models cache key"
+        type: string
+        default: ""
+      models_cache_paths:
+        description: "Newline-separated cache paths matching the key"
+        type: string
+        default: ""
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  # Without this, sccache speaks the retired v1 cache API and every write fails.
+  ACTIONS_CACHE_SERVICE_V2: "on"
+
+jobs:
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Codecov's tokenless OIDC upload
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      # One .profraw per test process (%p), merged below; workspace-anchored so
+      # the path needs no knowledge of the preset's binaryDir.
+      LLVM_PROFILE_FILE: ${{ github.workspace }}/profraw/%p.profraw
+    steps:
+      - name: get repo and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+      - name: restore the model fixtures
+        if: inputs.models_cache_prefix != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.models_cache_paths }}
+          key: ${{ inputs.models_cache_prefix }}-${{ hashFiles(inputs.models_hash_glob) }}
+          enableCrossOsArchive: true
+      - name: setup build tools
+        uses: ./.github/actions/setup-cpp-build-tools
+      # llvm-profdata/llvm-cov MUST match the clang that built the binaries —
+      # a newer clang's .profraw format is unreadable by older tools (the
+      # distro default llvm rejects clang 20's version-10 profiles).
+      - name: install llvm tools matching clang
+        run: |
+          VER=$(clang --version | sed -nE 's/.*clang version ([0-9]+).*/\1/p' | head -1)
+          sudo apt-get update && sudo apt-get install -y "llvm-${VER}"
+          echo "LLVM_VER=${VER}" >> "$GITHUB_ENV"
+      - name: build
+        uses: ./.github/actions/cmake-build
+        with:
+          PRESET: ${{ inputs.preset }}
+          CMAKE_BUILD_ARGS: ${{ inputs.build_args }}
+      - name: test
+        uses: ./.github/actions/cmake-test
+        with:
+          PRESET: ${{ inputs.preset }}
+      - name: export lcov
+        env:
+          LIB_PATTERN: ${{ inputs.lib_pattern }}
+          IGNORE_REGEX: ${{ inputs.ignore_regex }}
+        run: |
+          BUILD=$(python3 -c "
+          import json
+
+          with open('CMakePresets.json') as f:
+              presets = json.load(f)['configurePresets']
+
+          def binary_dir(name):
+              for p in presets:
+                  if p['name'] == name:
+                      if 'binaryDir' in p:
+                          return p['binaryDir']
+                      inherits = p.get('inherits', [])
+                      if isinstance(inherits, str):
+                          inherits = [inherits]
+                      for parent in inherits:
+                          found = binary_dir(parent)
+                          if found:
+                              return found
+              return None
+
+          found = binary_dir('${{ inputs.preset }}')
+          if not found:
+              raise SystemExit('no binaryDir found for preset ${{ inputs.preset }}')
+          print(found.replace('\${sourceDir}', '.'))
+          ")
+          echo "Build directory: $BUILD"
+          # LLVM_PROFILE_FILE is set for the whole job, so every instrumented
+          # process writes a profile, the ones the configure and the build run
+          # included, and one that dies while writing leaves a file llvm-profdata
+          # rejects. `merge` over all of them fails on the first such file and
+          # takes the whole metric with it, so: validate each, report what is
+          # invalid (its size and write time place the process in the job's
+          # timeline), tolerate one, merge the valid ones.
+          mapfile -t PROFILES < <(find profraw -name '*.profraw' -type f | sort)
+          echo "profile directory: ${#PROFILES[@]} files, $(du -sh profraw | cut -f1)"
+          echo "the five smallest:"
+          find profraw -name '*.profraw' -type f -printf '%s bytes  %TT  %p\n' | sort -n | head -5
+          VALID=()
+          INVALID=()
+          for f in "${PROFILES[@]}"; do
+            if llvm-profdata-${LLVM_VER} show "$f" > /dev/null 2>&1; then
+              VALID+=("$f")
+            else
+              INVALID+=("$f")
+            fi
+          done
+          for f in "${INVALID[@]}"; do
+            echo "::warning::invalid profile $f ($(stat -c '%s bytes, written %y' "$f")): $(llvm-profdata-${LLVM_VER} show "$f" 2>&1 | head -1)"
+          done
+          echo "valid: ${#VALID[@]}, invalid: ${#INVALID[@]}"
+          if [ "${#INVALID[@]}" -gt 1 ]; then
+            echo "::error::${#INVALID[@]} invalid profiles; one is tolerated (a process that died while writing), more is a broken run"
+            exit 1
+          fi
+          if [ "${#VALID[@]}" -eq 0 ]; then
+            echo "::error::no valid profile to merge"
+            exit 1
+          fi
+          printf '%s\n' "${VALID[@]}" > profraw.list
+          llvm-profdata-${LLVM_VER} merge -sparse -input-files=profraw.list -o merged.profdata
+          mapfile -t OBJECTS < <(
+            find "$BUILD" -name "$LIB_PATTERN" -type f
+            find "$BUILD"/test -maxdepth 2 -name 'test_*' -type f -perm -u+x
+          )
+          printf 'object: %s\n' "${OBJECTS[@]}"
+          FIRST="${OBJECTS[0]}"
+          REST=()
+          for o in "${OBJECTS[@]:1}"; do REST+=(-object "$o"); done
+          llvm-cov-${LLVM_VER} export -format=lcov -instr-profile merged.profdata \
+            -ignore-filename-regex="$IGNORE_REGEX" \
+            "$FIRST" "${REST[@]}" > coverage.lcov
+          wc -l coverage.lcov
+      - name: upload to Codecov
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          use_oidc: true
+          files: coverage.lcov
+          fail_ci_if_error: true

@@ -1,0 +1,39 @@
+name: changed-files
+description: "List the files a pull request changes (from git, no token) and say whether a check should sweep everything instead"
+
+# The caller checks out the pull request's merge ref, which is what
+# actions/checkout does by default on a pull_request event. fetch-depth: 2 saves
+# one extra fetch; with the default depth of 1 the action fetches the missing
+# level itself through the credentials the checkout persisted.
+
+inputs:
+  FULL_SWEEP_PATTERN:
+    required: false
+    default: ""
+    description: "Extended regex over the changed paths; a match sets sweep to true (e.g. the check's own config, after which every file may report differently). It meets the pull request's whole diff on every push, so keep it to paths few pull requests touch. Empty: no path forces a sweep."
+
+outputs:
+  files:
+    description: "The changed paths, newline-separated, deleted ones included; empty when sweep is true."
+    value: ${{ steps.select.outputs.files }}
+  sweep:
+    description: "'true' when the check should cover everything: not a pull_request event, a path matching the pattern, or a checkout the diff cannot be read from. 'false' otherwise."
+    value: ${{ steps.select.outputs.sweep }}
+  reason:
+    description: "One line saying why: the sweep trigger, or the number of changed files."
+    value: ${{ steps.select.outputs.reason }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: list the changed files
+      id: select
+      shell: bash
+      env:
+        # Through the environment, not inline substitution: paths and patterns
+        # are data, and the action path holds backslashes on Windows.
+        ACTION_PATH: ${{ github.action_path }}
+        CF_EVENT_NAME: ${{ github.event_name }}
+        CF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        CF_SWEEP_PATTERN: ${{ inputs.FULL_SWEEP_PATTERN }}
+      run: bash "$ACTION_PATH/changed-files.sh"

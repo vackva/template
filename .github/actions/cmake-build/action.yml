@@ -1,0 +1,141 @@
+name: cmake-build
+description: "Configure and build a CMake project (supports presets and manual mode)"
+
+inputs:
+  PRESET:
+    required: false
+    description: "CMake preset name. If set, uses preset mode (cmake --preset). Otherwise falls back to manual mode."
+  BUILD_TYPE:
+    required: false
+    description: "The build type (used in manual mode only)"
+  CMAKE_BUILD_PARALLEL_LEVEL:
+    required: false
+    default: "auto"
+    description: "Build parallelism. 'auto' (the default) detects the runner's core count; an integer pins it; an empty string passes no --parallel at all, leaving it to the build tool's own default (ninja already uses cores + 2)."
+  CMAKE_BUILD_ARGS:
+    required: false
+    description: "Additional cmake configure arguments, appended in both modes. In preset mode this lets one preset serve several configurations (e.g. backend sets) instead of a preset per combination."
+  TARGETS:
+    required: false
+    description: "Space-separated list of targets to build (optional)"
+  SCCACHE_MULTIARCH:
+    required: false
+    default: ""
+    description: "Non-empty enables SCCACHE_CACHE_MULTIARCH (caches multi -arch compiles, e.g. macOS universal; sccache flags it 'may be unsound' - adopt per leg on evidence)"
+
+runs:
+  using: "composite"
+  steps:
+    # Without ACTIONS_CACHE_SERVICE_V2, sccache's GHA cache client falls back
+    # to the retired v1 cache API: every read 404s and every write fails with
+    # "Cannot write to read-only storage" — a permanent 0% hit rate. Exported
+    # (with the enable flag, so callers need no env block) before the sccache
+    # server starts.
+    - name: enable the sccache GHA cache
+      shell: bash
+      run: |
+        echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+        echo "ACTIONS_CACHE_SERVICE_V2=on" >> "$GITHUB_ENV"
+        if [ -n "${{ inputs.SCCACHE_MULTIARCH }}" ]; then
+          echo "SCCACHE_CACHE_MULTIARCH=1" >> "$GITHUB_ENV"
+        fi
+
+    - name: cache the build
+      uses: mozilla-actions/sccache-action@v0.0.8
+
+    - name: print build configuration
+      shell: bash
+      run: |
+        echo "PRESET=${{ inputs.PRESET }}"
+        echo "BUILD_TYPE=${{ inputs.BUILD_TYPE }}"
+        echo "CMAKE_BUILD_PARALLEL_LEVEL=${{ inputs.CMAKE_BUILD_PARALLEL_LEVEL }}"
+        echo "CMAKE_BUILD_ARGS=${{ inputs.CMAKE_BUILD_ARGS }}"
+        echo "TARGETS=${{ inputs.TARGETS }}"
+
+    # Configure output is kept in configure.log (the pipe is safe: composite
+    # bash steps run with -o pipefail) so calling workflows can assert on it —
+    # e.g. anira greps for its backend auto-disable warnings.
+    - name: cmake configure
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.PRESET }}" ]; then
+          # Preset mode
+          cmake --preset ${{ inputs.PRESET }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ inputs.CMAKE_BUILD_ARGS }} 2>&1 | tee configure.log
+        else
+          # Manual mode with platform branching
+          if [[ "${{ matrix.name }}" == Linux-x86_64* ]]; then
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ inputs.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ inputs.CMAKE_BUILD_ARGS }} 2>&1 | tee configure.log
+          elif [[ "${{ matrix.name }}" == macOS-x86_64* ]]; then
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ inputs.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_OSX_ARCHITECTURES=x86_64 ${{ inputs.CMAKE_BUILD_ARGS }} 2>&1 | tee configure.log
+          elif [[ "${{ matrix.name }}" == macOS-arm64* ]]; then
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ inputs.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_OSX_ARCHITECTURES=arm64 ${{ inputs.CMAKE_BUILD_ARGS }} 2>&1 | tee configure.log
+          elif [[ "${{ matrix.name }}" == Windows-x86_64* ]]; then
+            cmake -B build -DCMAKE_BUILD_TYPE=${{ inputs.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ inputs.CMAKE_BUILD_ARGS }} 2>&1 | tee configure.log
+          else
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ inputs.BUILD_TYPE }} -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ${{ inputs.CMAKE_BUILD_ARGS }} 2>&1 | tee configure.log
+          fi
+        fi
+
+    - name: build targets
+      shell: bash
+      env:
+        # Not named CMAKE_BUILD_PARALLEL_LEVEL on purpose: cmake reads that
+        # variable itself, and it would choke on the literal 'auto'.
+        PARALLEL_INPUT: ${{ inputs.CMAKE_BUILD_PARALLEL_LEVEL }}
+      run: |
+        # Build parallelism follows the runner rather than a fixed number, for
+        # the same reason as the test job count: a pinned integer caps a large
+        # runner and oversubscribes a small one.
+        case "$PARALLEL_INPUT" in
+          "")   PARALLEL_ARG="" ;;
+          auto) PARALLEL_ARG="--parallel $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "${NUMBER_OF_PROCESSORS:-4}")" ;;
+          *)    PARALLEL_ARG="--parallel $PARALLEL_INPUT" ;;
+        esac
+        echo "build parallelism: ${PARALLEL_ARG:-unset (build tool default)}"
+        TARGETS="${{ inputs.TARGETS }}"
+        if [ -n "${{ inputs.PRESET }}" ]; then
+          # Preset mode
+          if [ -n "${TARGETS}" ]; then
+            for target in ${TARGETS}; do
+              echo "Building target: $target"
+              cmake --build --preset ${{ inputs.PRESET }} $PARALLEL_ARG --target $target
+            done
+          else
+            echo "Building all targets"
+            cmake --build --preset ${{ inputs.PRESET }} $PARALLEL_ARG
+          fi
+        else
+          # Manual mode
+          if [ -n "${TARGETS}" ]; then
+            for target in ${TARGETS}; do
+              echo "Building target: $target"
+              cmake --build build --config ${{ inputs.BUILD_TYPE }} $PARALLEL_ARG --target $target
+            done
+          else
+            echo "Building all targets"
+            cmake --build build --config ${{ inputs.BUILD_TYPE }} $PARALLEL_ARG
+          fi
+        fi
+
+    # One glanceable line per job: cache regressions (like the silent v1-protocol
+    # failure) surface in the run summary instead of requiring log archaeology.
+    - name: report the sccache hit rate
+      if: always()
+      shell: bash
+      run: |
+        command -v sccache >/dev/null || exit 0
+        sccache --show-stats --stats-format=json 2>/dev/null | python3 -c "
+        import json, sys
+        try:
+            st = json.load(sys.stdin)['stats']
+            hits = sum(st['cache_hits']['counts'].values())
+            misses = sum(st['cache_misses']['counts'].values())
+            req = st['compile_requests']
+            total = hits + misses
+            pct = (100 * hits // total) if total else 0
+            print(f'sccache: {pct}% hits ({hits}/{total} cacheable, {req} compile requests)')
+        except Exception as e:
+            print(f'sccache: no stats ({e})')
+        " | tee -a "$GITHUB_STEP_SUMMARY"

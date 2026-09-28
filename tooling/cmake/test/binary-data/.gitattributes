@@ -1,0 +1,2 @@
+# The embedded assets are compared byte for byte by the test: no EOL conversion, ever.
+assets/** -text

@@ -1,0 +1,22 @@
+name: clang-format-check
+description: "Check C++ source formatting with clang-format (fails on violations)"
+
+inputs:
+  SOURCES:
+    required: true
+    description: "Space-separated directories to check (e.g. 'src/ include/')"
+
+runs:
+  using: "composite"
+  steps:
+    - name: check formatting
+      shell: bash
+      run: |
+        echo "Checking formatting in: ${{ inputs.SOURCES }}"
+        echo "Using clang-format: $(clang-format --version)"
+        FILES=$(find ${{ inputs.SOURCES }} \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.mm' \) -type f)
+        if [ -z "$FILES" ]; then
+          echo "No source files found."
+          exit 0
+        fi
+        echo "$FILES" | xargs clang-format --dry-run --Werror

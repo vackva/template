@@ -1,0 +1,2 @@
+FILES="clang-format clang-tidy clangd"
+DEST=".%s"

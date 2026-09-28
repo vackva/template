@@ -1,0 +1,2 @@
+FILES="modules-version.cmake platform.cmake symbol-policy.cmake check-exports.cmake git-version.cmake sanitizers.cmake test-deps.cmake apple.cmake ios.toolchain.cmake package.cmake install-helpers.cmake binary-data.cmake bin2cpp.cmake"
+DEST="cmake/tanh/%s"

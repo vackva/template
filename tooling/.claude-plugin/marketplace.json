@@ -1,0 +1,11 @@
+{
+  "name": "tanh-tooling",
+  "owner": { "name": "tanh-lab" },
+  "plugins": [
+    {
+      "name": "tanh-tools",
+      "source": "./plugins/tanh-tools",
+      "description": "tanh-lab shared agents, skills, hooks, MCP, and clangd LSP"
+    }
+  ]
+}

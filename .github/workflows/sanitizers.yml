@@ -1,0 +1,34 @@
+name: sanitizers
+
+# ASan+UBSan, TSan and RTSan legs over .github/sanitizer_matrix.json. The preset
+# selects the sanitizer (TPL_SANITIZERS); reusable-sanitizer.yml sets the
+# *SAN_OPTIONS that make findings fail the job. RTSan checks every
+# TPL_NONBLOCKING function at runtime (Clang >= 20, which the workflow pins).
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sanitizers-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sanitize:
+    uses: ./.github/workflows/reusable-sanitizer.yml
+    with:
+      matrix_file: .github/sanitizer_matrix.json
+
+  result:
+    name: sanitizer result
+    needs: sanitize
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: aggregate
+        run: |
+          echo "workflow result: ${{ needs.sanitize.result }}"
+          [ "${{ needs.sanitize.result }}" = "success" ]

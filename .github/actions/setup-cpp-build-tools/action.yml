@@ -1,0 +1,61 @@
+name: setup-cpp-build-tools
+description: "Install platform-specific C++ build tools (clang, ninja, etc.)"
+
+inputs:
+  CLANG_VERSION:
+    required: false
+    default: "20"
+    description: "Clang version to install on Linux (e.g. 18, 19, 20)"
+
+runs:
+  using: "composite"
+  steps:
+    - name: printout
+      shell: bash
+      run: |
+        echo "ref=${{ github.ref }}"
+        echo "matrix.name=${{ matrix.name }}"
+        echo "matrix.os=${{ matrix.os }}"
+        uname -a || true
+
+    - name: install deps
+      shell: bash
+      run: |
+        # Jobs without a matrix, or with leg names that carry no platform
+        # prefix (e.g. sanitizer legs named per tool), fall back to the runner
+        # OS (Linux/macOS/Windows). iOS/Android legs must keep their prefix.
+        NAME="${{ matrix.name }}"
+        case "$NAME" in
+          Linux*|macOS*|Windows*|iOS*|Android*) ;;
+          *) NAME="${{ runner.os }}";;
+        esac
+        if [[ "$NAME" == Linux* ]]; then
+          # Add LLVM apt repository for the requested clang version
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          CODENAME=$(lsb_release -cs)
+          echo "deb http://apt.llvm.org/${CODENAME}/ llvm-toolchain-${CODENAME}-${{ inputs.CLANG_VERSION }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libsystemd-dev libcurl4-openssl-dev clang-${{ inputs.CLANG_VERSION }} clang-tidy-${{ inputs.CLANG_VERSION }} clang-format-${{ inputs.CLANG_VERSION }}
+
+          # Force symlinks so 'clang', 'clang++', etc. point to the installed version
+          # update-alternatives alone may not override existing binaries on the runner
+          sudo ln -sf /usr/bin/clang-${{ inputs.CLANG_VERSION }} /usr/bin/clang
+          sudo ln -sf /usr/bin/clang++-${{ inputs.CLANG_VERSION }} /usr/bin/clang++
+          sudo ln -sf /usr/bin/clang-format-${{ inputs.CLANG_VERSION }} /usr/bin/clang-format
+          sudo ln -sf /usr/bin/clang-tidy-${{ inputs.CLANG_VERSION }} /usr/bin/clang-tidy
+
+          echo "Installed clang version:"
+          clang --version
+        elif [[ "$NAME" == macOS* ]]; then
+          brew install osxutils ninja
+          echo "brew prefix: $(brew --prefix)"
+        elif [[ "$NAME" == Windows* ]]; then
+          choco install ninja llvm
+        elif [[ "$NAME" == iOS* ]]; then
+          brew install ninja
+          echo "iOS build — Xcode tools from runner image"
+        elif [[ "$NAME" == Android* ]]; then
+          echo "Android build — NDK expected via nttld/setup-ndk"
+        else
+          echo "Unknown platform: $NAME"
+        fi

@@ -1,0 +1,5 @@
+[
+  { "name": "ASan-UBSan", "preset": "desktop-tests-asan" },
+  { "name": "TSan", "preset": "desktop-tests-tsan" },
+  { "name": "RTSan", "preset": "desktop-tests-rtsan" }
+]

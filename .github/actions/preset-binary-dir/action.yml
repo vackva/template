@@ -1,0 +1,47 @@
+name: preset-binary-dir
+description: "Resolve a CMake configure preset's binaryDir (inherits-aware) into an output"
+
+inputs:
+  PRESET:
+    required: true
+    description: "Configure preset name"
+
+outputs:
+  BUILD_DIR:
+    description: "The preset's binaryDir, relative to the source dir"
+    value: ${{ steps.resolve.outputs.BUILD_DIR }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: resolve
+      id: resolve
+      shell: bash
+      run: |
+        BUILD_DIR=$(python3 -c "
+        import json
+
+        with open('CMakePresets.json') as f:
+            presets = json.load(f)['configurePresets']
+
+        def binary_dir(name):
+            for p in presets:
+                if p['name'] == name:
+                    if 'binaryDir' in p:
+                        return p['binaryDir']
+                    inherits = p.get('inherits', [])
+                    if isinstance(inherits, str):
+                        inherits = [inherits]
+                    for parent in inherits:
+                        found = binary_dir(parent)
+                        if found:
+                            return found
+            return None
+
+        found = binary_dir('${{ inputs.PRESET }}')
+        if not found:
+            raise SystemExit('no binaryDir found for preset ${{ inputs.PRESET }}')
+        print(found.replace('\${sourceDir}/', '').replace('\${sourceDir}', '.'))
+        ")
+        echo "BUILD_DIR=${BUILD_DIR}" >> "$GITHUB_OUTPUT"
+        echo "Resolved ${{ inputs.PRESET }} -> ${BUILD_DIR}"

@@ -1,0 +1,50 @@
+name: clang_tidy
+
+# clang-tidy with warnings as errors. Pull requests check only the .cpp files they
+# change (from git, no token); a .clang-tidy change or any other event sweeps all
+# of SOURCES, so main stays the enforcement point for header-driven findings.
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: clang_tidy-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - name: Linux-x86_64
+            os: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: ./.github/actions/setup-cpp-build-tools
+      # clang-tidy needs compile_commands.json and the fetched googletest headers.
+      - uses: ./.github/actions/cmake-build
+        with:
+          PRESET: desktop-debug
+      - uses: ./.github/actions/clang-tidy-check
+        with:
+          PRESET: desktop-debug
+          SOURCES: "src/ test/"
+          CHANGED_FILES_ONLY: "true"
+          FULL_SWEEP_PATTERN: '^\.clang-tidy$|^tooling/clang/clang-tidy$|^\.github/workflows/clang_tidy\.yml$'
+
+  result:
+    name: clang_tidy result
+    needs: tidy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: aggregate
+        run: '[ "${{ needs.tidy.result }}" = "success" ]'

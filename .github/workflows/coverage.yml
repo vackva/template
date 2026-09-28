@@ -1,0 +1,42 @@
+name: coverage
+
+# Full-suite coverage to Codecov. The pipeline is reusable-coverage.yml: build the
+# ci-tests-coverage preset (clang -fprofile-instr-generate -fcoverage-mapping),
+# run ctest, merge the profiles, export lcov over libtpl_dsp.so + test_* binaries,
+# upload tokenless via OIDC.
+#
+# A coverage dip is information, never a merge blocker (codecov.yml turns every
+# status off). This workflow's own result only says whether the pipeline still
+# works: the instrumented build links, the suite passes, the export succeeds.
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    uses: ./.github/workflows/reusable-coverage.yml
+    permissions:
+      contents: read
+      id-token: write # Codecov's tokenless OIDC upload
+    with:
+      preset: ci-tests-coverage
+      lib_pattern: "libtpl_dsp.so*"
+
+  result:
+    name: coverage result
+    needs: coverage
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: aggregate
+        run: |
+          echo "workflow result: ${{ needs.coverage.result }}"
+          [ "${{ needs.coverage.result }}" = "success" ]

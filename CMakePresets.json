@@ -1,0 +1,123 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "desktop-debug",
+      "displayName": "Desktop Debug (default dev build; compile DB for clangd + hooks)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/desktop/Debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "desktop-release",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/desktop/Release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "ci-tests-shared",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/shared",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "BUILD_SHARED_LIBS": "ON" }
+    },
+    {
+      "name": "ci-tests-static",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/static",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "BUILD_SHARED_LIBS": "OFF" }
+    },
+    {
+      "name": "ci-tests-gcc",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/gcc",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_SHARED_LIBS": "ON",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "windows-msvc-tests-shared",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/msvc-shared",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_SHARED_LIBS": "ON",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "ci-tests-coverage",
+      "displayName": "Coverage (clang source-based; see reusable-coverage.yml)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_SHARED_LIBS": "ON",
+        "CMAKE_CXX_FLAGS": "-fprofile-instr-generate -fcoverage-mapping"
+      }
+    },
+    {
+      "name": "desktop-tests-asan",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/sanitizers/asan",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "TPL_SANITIZERS": "asan;ubsan" }
+    },
+    {
+      "name": "desktop-tests-tsan",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/sanitizers/tsan",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "TPL_SANITIZERS": "tsan" }
+    },
+    {
+      "name": "desktop-tests-rtsan",
+      "displayName": "RealtimeSanitizer (needs Clang >= 20; checks TPL_NONBLOCKING functions)",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/sanitizers/rtsan",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "TPL_SANITIZERS": "rtsan" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "desktop-debug", "configurePreset": "desktop-debug" },
+    { "name": "desktop-release", "configurePreset": "desktop-release" },
+    { "name": "ci-tests-shared", "configurePreset": "ci-tests-shared" },
+    { "name": "ci-tests-static", "configurePreset": "ci-tests-static" },
+    { "name": "ci-tests-gcc", "configurePreset": "ci-tests-gcc" },
+    { "name": "windows-msvc-tests-shared", "configurePreset": "windows-msvc-tests-shared" },
+    { "name": "ci-tests-coverage", "configurePreset": "ci-tests-coverage" },
+    { "name": "desktop-tests-asan", "configurePreset": "desktop-tests-asan" },
+    { "name": "desktop-tests-tsan", "configurePreset": "desktop-tests-tsan" },
+    { "name": "desktop-tests-rtsan", "configurePreset": "desktop-tests-rtsan" }
+  ],
+  "testPresets": [
+    {
+      "name": "test-base",
+      "hidden": true,
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    },
+    { "name": "desktop-debug", "inherits": "test-base", "configurePreset": "desktop-debug" },
+    { "name": "desktop-release", "inherits": "test-base", "configurePreset": "desktop-release" },
+    { "name": "ci-tests-shared", "inherits": "test-base", "configurePreset": "ci-tests-shared" },
+    { "name": "ci-tests-static", "inherits": "test-base", "configurePreset": "ci-tests-static" },
+    { "name": "ci-tests-gcc", "inherits": "test-base", "configurePreset": "ci-tests-gcc" },
+    { "name": "windows-msvc-tests-shared", "inherits": "test-base", "configurePreset": "windows-msvc-tests-shared" },
+    { "name": "ci-tests-coverage", "inherits": "test-base", "configurePreset": "ci-tests-coverage" },
+    { "name": "desktop-tests-asan", "inherits": "test-base", "configurePreset": "desktop-tests-asan" },
+    { "name": "desktop-tests-tsan", "inherits": "test-base", "configurePreset": "desktop-tests-tsan" },
+    { "name": "desktop-tests-rtsan", "inherits": "test-base", "configurePreset": "desktop-tests-rtsan" }
+  ]
+}

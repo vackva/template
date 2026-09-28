@@ -1,0 +1,124 @@
+name: build-sanitizer
+
+# Reusable sanitizer build+test over a caller-side matrix file and CMake presets.
+# The caller keeps only its facts (triggers, the matrix JSON, presets, cache
+# config); the logic lives here once, in the repo it runs for.
+#
+# Matrix rows: { name, preset, models? }
+#   name    -> the job's display name (e.g. "ASan-UBSan", "TSan")
+#   preset  -> configure/build/test preset, which is what selects the sanitizer
+#   models  -> true restores the caller's fixture cache on this leg. Off by
+#              default: a sanitizer leg that builds no backends needs no model
+#              trees, and the restore is the most expensive step in the job.
+#
+# The *SAN_OPTIONS below are the reason this workflow exists rather than a
+# copied job block. UBSan defaults to print-and-continue, so without
+# halt_on_error a diagnosed undefined behaviour scrolls past and the leg still
+# reports success — the check is decorative. Each sanitizer runtime reads only
+# its own variable, so setting all three on every leg is harmless.
+#
+# Vendored from tanh-lab/ci-actions (see .github/CLAUDE.md): the steps use the
+# composite actions in ./.github/actions of the SAME commit, so there is no pin to bump.
+
+on:
+  workflow_call:
+    inputs:
+      matrix_file:
+        description: "Caller-relative path of the matrix JSON"
+        type: string
+        default: ".github/sanitizer_matrix.json"
+      runs_on:
+        description: "Runner for every sanitizer leg"
+        type: string
+        default: "ubuntu-24.04"
+      clang_version:
+        description: "Clang pin. RTSan (-fsanitize=realtime) needs >= 20, so that is the floor for any matrix containing an RTSan leg."
+        type: string
+        default: "20"
+      asan_options:
+        description: "ASAN_OPTIONS for every leg. detect_leaks is Linux-only — LSan does not exist on Darwin and ASan aborts when asked for it, so a macOS caller must clear this."
+        type: string
+        default: "detect_leaks=1"
+      ubsan_options:
+        description: "UBSAN_OPTIONS for every leg. Keep halt_on_error=1 or UBSan findings cannot fail the job."
+        type: string
+        default: "halt_on_error=1:print_stacktrace=1"
+      tsan_options:
+        description: "TSAN_OPTIONS for every leg"
+        type: string
+        default: "halt_on_error=1:second_deadlock_stack=1"
+      models_cache_prefix:
+        description: "Cache-key prefix for pre-fetched fixture trees; the full key is <prefix>-hashFiles(models_hash_glob). Empty skips the restore. (hashFiles is step-scoped, so callers cannot compute the key themselves.) Only rows with models: true restore it."
+        type: string
+        default: ""
+      models_hash_glob:
+        description: "File pattern hashed into the models cache key (e.g. the pin manifest)"
+        type: string
+        default: ""
+      models_cache_paths:
+        description: "Newline-separated cache paths matching the key"
+        type: string
+        default: ""
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  # Without this, sccache speaks the retired v1 cache API and every write fails.
+  ACTIONS_CACHE_SERVICE_V2: "on"
+
+jobs:
+  plan:
+    name: plan (sanitizers)
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: read the matrix
+        id: read
+        shell: bash
+        run: echo "matrix=$(jq -c '.' "${{ inputs.matrix_file }}")" >> "$GITHUB_OUTPUT"
+
+  sanitize:
+    name: ${{ matrix.name }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ inputs.runs_on }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }} # authenticated release-API checks in caller CMake
+      ASAN_OPTIONS: ${{ inputs.asan_options }}
+      UBSAN_OPTIONS: ${{ inputs.ubsan_options }}
+      TSAN_OPTIONS: ${{ inputs.tsan_options }}
+    steps:
+      - name: get repo and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          fetch-tags: true
+      - name: restore the model fixtures
+        if: matrix.models && inputs.models_cache_prefix != ''
+        id: models
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.models_cache_paths }}
+          key: ${{ inputs.models_cache_prefix }}-${{ hashFiles(inputs.models_hash_glob) }}
+          enableCrossOsArchive: true
+      - name: note a fixture-cache miss
+        if: matrix.models && inputs.models_cache_prefix != '' && steps.models.outputs.cache-hit != 'true'
+        shell: bash
+        run: echo "models cache MISS — the configure fetches the pins itself" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: setup build tools
+        uses: ./.github/actions/setup-cpp-build-tools
+        with:
+          CLANG_VERSION: ${{ inputs.clang_version }}
+      - name: build
+        uses: ./.github/actions/cmake-build
+        with:
+          PRESET: ${{ matrix.preset }}
+      - name: test
+        uses: ./.github/actions/cmake-test
+        with:
+          PRESET: ${{ matrix.preset }}

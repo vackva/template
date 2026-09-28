@@ -1,0 +1,47 @@
+name: cmake-test
+description: "Run CTest (supports presets and manual mode)"
+
+inputs:
+  PRESET:
+    required: false
+    description: "CMake test preset name. If set, uses ctest --preset. Otherwise falls back to ctest --test-dir build."
+  CTEST_JOBS:
+    required: false
+    default: "auto"
+    description: "Test parallelism. 'auto' (the default) detects the runner's core count; an integer pins it; an empty string passes no job count at all, leaving it to the test preset's execution.jobs or to CTEST_PARALLEL_LEVEL."
+  CTEST_ARGS:
+    required: false
+    default: ""
+    description: "Additional arguments passed to ctest in both modes (e.g. -R to filter). Appended after the job count, so a -j here wins over CTEST_JOBS."
+
+runs:
+  using: "composite"
+  steps:
+    - name: ctest
+      shell: bash
+      env:
+        CTEST_JOBS: ${{ inputs.CTEST_JOBS }}
+      run: |
+        # Test parallelism, resolved here rather than pinned in each consumer's
+        # CMakePresets.json: a preset integer is a property of the machine that
+        # happens to run it, so it caps a big runner and oversubscribes a small
+        # one. 'auto' follows whatever runner GitHub gives us.
+        #
+        # CTest applies a preset's execution.jobs as if it were on the command
+        # line and the LAST job flag wins, so this flag overrides a preset that
+        # still pins a number, and a -j inside CTEST_ARGS (appended last) in turn
+        # overrides this one. CTEST_PARALLEL_LEVEL is deliberately not a fallback:
+        # ctest ignores that variable whenever any job count is on the command
+        # line, so it only has an effect when CTEST_JOBS is set to the empty
+        # string.
+        case "$CTEST_JOBS" in
+          "")   JOBS_ARG="" ;;
+          auto) JOBS_ARG="-j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo "${NUMBER_OF_PROCESSORS:-4}")" ;;
+          *)    JOBS_ARG="-j$CTEST_JOBS" ;;
+        esac
+        echo "ctest parallelism: ${JOBS_ARG:-unset (preset execution.jobs or CTEST_PARALLEL_LEVEL decides)}"
+        if [ -n "${{ inputs.PRESET }}" ]; then
+          ctest --preset ${{ inputs.PRESET }} $JOBS_ARG ${{ inputs.CTEST_ARGS }}
+        else
+          ctest --test-dir build --output-on-failure $JOBS_ARG ${{ inputs.CTEST_ARGS }}
+        fi

@@ -1,0 +1,125 @@
+name: clang-tidy-check
+description: "Run clang-tidy on C++ sources (fails on any warning)"
+
+inputs:
+  SOURCES:
+    required: true
+    description: "Space-separated directories to check (e.g. 'src/')"
+  BUILD_DIR:
+    required: false
+    default: "build"
+    description: "Path to build directory containing compile_commands.json (used when PRESET is not set)"
+  PRESET:
+    required: false
+    description: "CMake preset name. If set, derives the build directory from the preset's binaryDir."
+  FILES:
+    required: false
+    default: ""
+    description: "Optional explicit file list (space/newline-separated), e.g. a PR's changed files: only entries inside the SOURCES scope that end in .cpp and still exist are checked, and an empty result passes. Omit to check everything under SOURCES. A non-empty list wins over CHANGED_FILES_ONLY."
+  CHANGED_FILES_ONLY:
+    required: false
+    default: "false"
+    description: "'true': on a pull_request event check only the .cpp files the pull request changes (read from git, no token; see changed-files), a pull request that changes none passes. Every other event sweeps SOURCES (the merge queue; a workflow_dispatch run is the way to sweep a branch by hand), and so does any checkout the diff cannot be read from. A header change does not widen the set: what it breaks in an untouched file shows in the next sweep (the merge queue), so keep one."
+  FULL_SWEEP_PATTERN:
+    required: false
+    default: ""
+    description: "With CHANGED_FILES_ONLY: extended regex over the changed paths; a match sweeps SOURCES (e.g. '^\\.clang-tidy$', after which every file may report differently). Keep it narrow: it meets the pull request's whole diff on every push, so a path many pull requests touch (a CMakeLists.txt) sweeps them on every push."
+
+runs:
+  using: "composite"
+  steps:
+    - name: determine build directory
+      id: builddir
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.PRESET }}" ]; then
+          # Extract binaryDir from CMakePresets.json for the given preset
+          BINARY_DIR=$(python3 -c "
+        import json
+
+        with open('CMakePresets.json') as f:
+            presets = json.load(f)['configurePresets']
+
+        def binary_dir(name):
+            for p in presets:
+                if p['name'] == name:
+                    if 'binaryDir' in p:
+                        return p['binaryDir']
+                    inherits = p.get('inherits', [])
+                    if isinstance(inherits, str):
+                        inherits = [inherits]
+                    for parent in inherits:
+                        found = binary_dir(parent)
+                        if found:
+                            return found
+            return None
+
+        found = binary_dir('${{ inputs.PRESET }}') or 'build'
+        print(found.replace('\${sourceDir}/', '').replace('\${sourceDir}', '.'))
+        ")
+          echo "BUILD_DIR=${BINARY_DIR}" >> $GITHUB_OUTPUT
+        else
+          echo "BUILD_DIR=${{ inputs.BUILD_DIR }}" >> $GITHUB_OUTPUT
+        fi
+        echo "Using build directory: $(grep BUILD_DIR $GITHUB_OUTPUT)"
+
+    # The pull request's changed files, by the script the changed-files action
+    # runs: both actions live side by side in .github/actions of the same
+    # checkout, so they always run one commit's logic. A missing script sweeps.
+    - name: select the pull request's changed files
+      id: changed
+      if: inputs.FILES == '' && inputs.CHANGED_FILES_ONLY == 'true'
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CF_EVENT_NAME: ${{ github.event_name }}
+        CF_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        CF_SWEEP_PATTERN: ${{ inputs.FULL_SWEEP_PATTERN }}
+      run: |
+        SCRIPT="$ACTION_PATH/../changed-files/changed-files.sh"
+        if [ -f "$SCRIPT" ]; then
+          bash "$SCRIPT"
+        else
+          echo "changed-files.sh is not beside this action - full sweep."
+          echo "sweep=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: run clang-tidy
+      shell: bash
+      env:
+        # Through the environment, not inline substitution: the list is
+        # newline-separated, and inlining it into the script breaks the shell
+        # syntax (and would be an injection vector).
+        TIDY_FILES: ${{ inputs.FILES != '' && inputs.FILES || steps.changed.outputs.files }}
+        # 'list' checks TIDY_FILES and nothing else, an empty list included (a
+        # pull request without a .cpp change passes); 'sweep' checks SOURCES.
+        TIDY_MODE: ${{ (inputs.FILES != '' || steps.changed.outputs.sweep == 'false') && 'list' || 'sweep' }}
+      run: |
+        echo "Running clang-tidy on: ${{ inputs.SOURCES }}"
+        echo "Build directory: ${{ steps.builddir.outputs.BUILD_DIR }}"
+        echo "Using clang-tidy: $(clang-tidy --version)"
+        NPROC=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+        if [ "$TIDY_MODE" = "list" ]; then
+          # Diff mode: intersect the given list with the SOURCES scope, so a
+          # caller can pass a raw changed-files list — PRs check only what they
+          # touch, the full sweep stays on push/nightly runs. Deleted files and
+          # anything outside SOURCES fall out here.
+          FILES=""
+          for f in $TIDY_FILES; do
+            case "$f" in *.cpp) ;; *) continue ;; esac
+            [ -f "$f" ] || continue
+            for s in ${{ inputs.SOURCES }}; do
+              case "$f" in $s|$s*) FILES="${FILES}${f}"$'\n'; break ;; esac
+            done
+          done
+          FILES=$(printf '%s' "$FILES" | sort -u)
+          echo "Diff mode: checking only the listed files inside the SOURCES scope."
+        else
+          FILES=$(find ${{ inputs.SOURCES }} -name '*.cpp' -type f)
+        fi
+        if [ -z "$FILES" ]; then
+          echo "No source files found."
+          exit 0
+        fi
+        echo "Running with $NPROC parallel jobs"
+        echo "$FILES" | xargs -P "$NPROC" -n 1 clang-tidy -p ${{ steps.builddir.outputs.BUILD_DIR }} --warnings-as-errors='*'

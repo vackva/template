@@ -1,0 +1,3 @@
+FILES="pre-push"
+DEST="hooks/tanh/%s"
+MODE="755"

@@ -1,0 +1,44 @@
+name: tooling
+
+# Proves tooling/ before the repo depends on a change to it: every CMake module has
+# a standalone test project under tooling/cmake/test/ (configured, built and run
+# the way a consumer would), on the three desktop object formats (ELF, Mach-O,
+# PE); and the installer round-trips.
+
+on:
+  pull_request:
+    paths: ["tooling/**", ".github/workflows/tooling.yml"]
+  push:
+    branches: [main]
+    paths: ["tooling/**", ".github/workflows/tooling.yml"]
+  workflow_dispatch:
+
+jobs:
+  modules:
+    name: cmake modules (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - name: configure the test driver
+        run: cmake -S tooling/cmake/test -B build/tooling-test
+      - name: run the module tests
+        run: ctest --test-dir build/tooling-test -C Release --output-on-failure
+
+  installer:
+    name: installer (--check round trip)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: install, check, and catch a foreign file
+        run: |
+          sh tooling/install.sh clang cmake hooks
+          git diff --exit-code   # installing over a clean tree changes nothing
+          sh tooling/install.sh --check clang cmake hooks
+          touch cmake/tanh/local.cmake
+          if sh tooling/install.sh --check cmake; then
+            echo "expected --check to flag cmake/tanh/local.cmake" >&2; exit 1
+          fi

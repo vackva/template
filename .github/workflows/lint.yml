@@ -1,0 +1,45 @@
+name: lint
+
+# clang-format over the sources, and the tooling drift check: the installed copies
+# (.clang-*, cmake/tanh/, hooks/tanh/) must equal their sources in tooling/.
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: lint-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cpp-build-tools
+      - uses: ./.github/actions/clang-format-check
+        with:
+          SOURCES: "src/ include/ test/"
+
+  tooling-config:
+    name: tooling-config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: installed copies match tooling/
+        run: sh tooling/install.sh --check clang cmake hooks
+
+  result:
+    name: lint result
+    needs: [format, tooling-config]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: aggregate
+        run: |
+          echo "format: ${{ needs.format.result }}, tooling-config: ${{ needs.tooling-config.result }}"
+          [ "${{ needs.format.result }}" = "success" ] && [ "${{ needs.tooling-config.result }}" = "success" ]

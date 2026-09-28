@@ -1,0 +1,16 @@
+# Coverage is measured by .github/workflows/coverage.yml (clang source-based coverage
+# over the shared library + test binaries, uploaded as lcov). llvm-cov already drops
+# test/, build/ and fetched code (reusable-coverage.yml, ignore_regex).
+#
+# Codecov is a metric, never a gate: no commit status that can fail a pull request,
+# no bot comment, no inline annotations. The CI checks decide what merges; the number
+# is there when someone wants to look at it.
+coverage:
+  status:
+    project: off
+    patch: off
+
+comment: false
+
+github_checks:
+  annotations: false
