@@ -25,11 +25,12 @@ Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePole
 | Path | What |
 |---|---|
 | `include/tpl/`, `src/` | the library; `include/tpl/Exports.h` holds `TPL_API` and `TPL_NONBLOCKING` |
-| `test/` | GoogleTest suites (own `CLAUDE.md`) |
-| `tooling/` | in-repo tanh-tooling: clang configs, CMake modules, git hook, Claude plugin (own `CLAUDE.md`) |
+| `test/` | GoogleTest suites, `test_<component>` executables |
+| `tooling/` | in-repo tanh-tooling: clang configs, CMake modules, git hook, Claude plugin |
 | `.clang-*`, `cmake/tanh/`, `hooks/tanh/` | **installed copies** of `tooling/` — never edit (a hook blocks it) |
-| `.github/` | CI: callers, in-repo ci-actions (own `CLAUDE.md`) |
+| `.github/` | CI: caller workflows, vendored ci-actions (`actions/`, `reusable-*.yml`), matrices, ruleset |
 | `.claude/` | settings, project hooks, the `add-processor` skill |
+| `docs/` | one page per config (presets, clang tools, hooks, CI, …) — update it when a config changes |
 
 ## Rules
 
@@ -47,6 +48,28 @@ Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePole
   New presets go in `CMakePresets.json` with matching build and test presets.
 - **Every change comes with tests** in `test/`, and an entry in `CHANGELOG.md` under `[Unreleased]`
   when behaviour or API changes.
+
+## Tests
+
+- One executable per component, `test_<component>`, registered with `tpl_add_test()` in
+  `test/CMakeLists.txt`; one file per class, `test/<component>/test_<Class>.cpp`, inside an
+  anonymous namespace. The `test_` name is load-bearing (the coverage job collects it).
+- Test behaviour, not implementation: measured responses, exact endpoints, edge cases (zero,
+  negative, above Nyquist, infinities) and `reset()`. `EXPECT_NEAR` with a stated tolerance.
+- Deterministic and parallel-safe: no sleeps, no unseeded randomness, no files outside the build
+  tree — the suite also runs under ASan, TSan and RTSan.
+- GoogleTest comes from `tanh_fetch_googletest()`; do not add another FetchContent for it.
+
+## Tooling and CI
+
+- `tooling/` is the source of truth for `.clang-*`, `cmake/tanh/`, `hooks/tanh/`: edit there, run
+  `sh tooling/install.sh <clang|cmake|hooks>`, commit source and copy together. CMake module
+  changes: `just tooling-test`. Plugin changes: bump `version` in its `plugin.json`.
+- CI callers (`.github/workflows/<name>.yml`) hold only triggers, matrix and presets; the logic is
+  in `.github/actions/` and `reusable-*.yml`, referenced as `./.github/...`. Every workflow ends in
+  a `<name> result` job — those are the required checks. A matrix row names a preset; add the
+  preset first.
+- Details for humans live in `docs/` (one page per config).
 
 ## What runs automatically
 

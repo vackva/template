@@ -17,7 +17,7 @@ Follow the shape of `Gain` / `OnePoleLowpass`; read both before writing.
      `prepare()`/setters, never per sample if avoidable.
    - Smooth user-facing parameters with `SmoothedValue`.
 3. **Tests** `test/dsp/test_<Name>.cpp`, added to `tpl_add_test(dsp …)` in `test/CMakeLists.txt`
-   (see `test/CLAUDE.md`): at least one behavioural test (a measured response, not just
+   (see "Tests" in `CLAUDE.md`): at least one behavioural test (a measured response, not just
    "does not crash"), one edge-case test (zero / extreme parameters), and one for `reset()`.
 4. **Changelog** — entry under `## [Unreleased]` in `CHANGELOG.md`.
 5. **Verify** — `just test`; then ask the `dsp-reviewer` agent to review the new files

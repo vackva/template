@@ -1,6 +1,6 @@
 name: coverage
 
-# Vendored from tanh-lab/ci-actions (see .github/CLAUDE.md).
+# Vendored from tanh-lab/ci-actions (see docs/ci.md).
 #
 # Reusable full-suite coverage leg: build a preset instrumented for clang
 # source-based coverage (the caller's preset carries the flags), run the whole

@@ -1,0 +1,35 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "model": "opus[1m]",
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "figma@claude-plugins-official": true,
+    "audio-plugin-validators@audio-plugin-dev-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "audio-plugin-dev-skills": {
+      "source": {
+        "source": "github",
+        "repo": "iPlug3/audio-plugin-dev-skills"
+      }
+    },
+    "tanh-tooling": {
+      "source": {
+        "source": "github",
+        "repo": "tanh-lab/tanh-tooling"
+      },
+      "autoUpdate": true
+    }
+  },
+  "effortLevel": "high",
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "inputNeededNotifEnabled": true
+}
