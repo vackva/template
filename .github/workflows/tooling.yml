@@ -11,6 +11,7 @@ on:
   push:
     branches: [main]
     paths: ["tooling/**", ".github/workflows/tooling.yml"]
+  workflow_call:
   workflow_dispatch:
 
 jobs:

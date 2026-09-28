@@ -1,8 +1,9 @@
 [
-  { "name": "Linux-x86_64-shared", "os": "ubuntu-24.04", "preset": "ci-tests-shared", "pr": true },
-  { "name": "Linux-x86_64-static", "os": "ubuntu-24.04", "preset": "ci-tests-static", "pr": false },
-  { "name": "Linux-x86_64-gcc", "os": "ubuntu-24.04", "preset": "ci-tests-gcc", "pr": false },
-  { "name": "Linux-arm64-shared", "os": "ubuntu-24.04-arm", "preset": "ci-tests-shared", "pr": false },
-  { "name": "macOS-arm64-shared", "os": "macos-15", "preset": "ci-tests-shared", "pr": true },
-  { "name": "Windows-x86_64-shared", "os": "windows-2025", "preset": "windows-msvc-tests-shared", "pr": true, "vcvars": "x64" }
+  {"name": "Linux-x86_64-shared", "os": "ubuntu-24.04", "preset": "ci-tests-shared", "pr": true},
+  {"name": "Linux-x86_64-static", "os": "ubuntu-24.04", "preset": "ci-tests-static", "pr": false},
+  {"name": "Linux-x86_64-gcc", "os": "ubuntu-24.04", "preset": "ci-tests-gcc", "pr": false},
+  {"name": "Linux-arm64-shared", "os": "ubuntu-24.04-arm", "preset": "ci-tests-shared", "pr": false},
+  {"name": "macOS-arm64-shared", "os": "macos-15", "preset": "ci-tests-shared", "pr": true},
+  {"name": "Windows-x86_64-shared", "os": "windows-2025", "preset": "windows-msvc-tests-shared", "pr": true, "vcvars": "x64"},
+  {"name": "Windows-x86_64-static", "os": "windows-2025", "preset": "windows-msvc-tests-static", "pr": false, "vcvars": "x64"}
 ]

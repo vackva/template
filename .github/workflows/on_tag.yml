@@ -1,0 +1,106 @@
+name: on_tag
+
+# A version tag (vX.Y.Z) runs everything, then publishes. Every check workflow
+# runs in full (build_test with the full matrix, clang-tidy as a sweep); only
+# when all of them pass are the release packages built — every platform, shared
+# and static, `cmake --install` of the same presets the tests ran — and attached
+# to a GitHub Release. The version comes from the tag itself (tanh_git_version).
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+  build_test:
+    uses: ./.github/workflows/build_test.yml
+    with:
+      tier: full
+  sanitizers:
+    uses: ./.github/workflows/sanitizers.yml
+  clang_tidy:
+    uses: ./.github/workflows/clang_tidy.yml
+  coverage:
+    uses: ./.github/workflows/coverage.yml
+    permissions:
+      contents: read
+      id-token: write # Codecov's tokenless OIDC upload
+  tooling:
+    uses: ./.github/workflows/tooling.yml
+
+  package:
+    name: package ${{ matrix.name }}
+    needs: [lint, build_test, sanitizers, clang_tidy, coverage, tooling]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux-x86_64-shared,   os: ubuntu-24.04,     preset: ci-tests-shared }
+          - { name: Linux-x86_64-static,   os: ubuntu-24.04,     preset: ci-tests-static }
+          - { name: Linux-arm64-shared,    os: ubuntu-24.04-arm, preset: ci-tests-shared }
+          - { name: Linux-arm64-static,    os: ubuntu-24.04-arm, preset: ci-tests-static }
+          - { name: macOS-arm64-shared,    os: macos-15,         preset: ci-tests-shared }
+          - { name: macOS-arm64-static,    os: macos-15,         preset: ci-tests-static }
+          - { name: Windows-x86_64-shared, os: windows-2025,     preset: windows-msvc-tests-shared, vcvars: x64 }
+          - { name: Windows-x86_64-static, os: windows-2025,     preset: windows-msvc-tests-static, vcvars: x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tanh_git_version reads the tag
+      - uses: ./.github/actions/setup-cpp-build-tools
+      - name: MSVC environment
+        if: matrix.vcvars
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.vcvars }}
+      - uses: ./.github/actions/cmake-build
+        with:
+          PRESET: ${{ matrix.preset }}
+          CMAKE_BUILD_ARGS: "-DTPL_WITH_TESTS=OFF -DTPL_WITH_INSTALL=ON"
+      - name: resolve the build directory
+        id: bdir
+        uses: ./.github/actions/preset-binary-dir
+        with:
+          PRESET: ${{ matrix.preset }}
+      - name: install and zip
+        shell: bash
+        env:
+          PACKAGE: tpl-${{ github.ref_name }}-${{ matrix.name }}
+        run: |
+          cmake --install "${{ steps.bdir.outputs.BUILD_DIR }}" --prefix "dist/$PACKAGE"
+          cp LICENSE* README.md CHANGELOG.md "dist/$PACKAGE/" 2>/dev/null || true
+          cd dist && cmake -E tar cf "$PACKAGE.zip" --format=zip "$PACKAGE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tpl-${{ matrix.name }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "${{ github.ref_name }}" in *-*) prerelease="--prerelease";; esac
+          gh release create "${{ github.ref_name }}" dist/*.zip \
+            --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --generate-notes $prerelease

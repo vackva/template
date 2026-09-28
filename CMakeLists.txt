@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)  # clangd, clang-tidy, the Claude lint hook
 
 option(TPL_WITH_TESTS "Build the GoogleTest suites" ${PROJECT_IS_TOP_LEVEL})
+option(TPL_WITH_INSTALL "Generate install rules and the tpl CMake package" ${PROJECT_IS_TOP_LEVEL})
 set(TPL_SANITIZERS "" CACHE STRING "Sanitizers for tpl_dsp and its tests, e.g. \"asan;ubsan\" (rtsan, asan, ubsan, tsan, msan, lsan)")
 
 include(cmake/tanh/platform.cmake)
@@ -47,6 +48,10 @@ foreach(_san IN LISTS TPL_SANITIZERS)
     string(TOUPPER "${_san}" _san_upper)
     tanh_add_sanitizer(tpl_dsp ${_san} DEFINE TPL_WITH_${_san_upper})
 endforeach()
+
+if(TPL_WITH_INSTALL)
+    include(cmake/install.cmake)
+endif()
 
 if(TPL_WITH_TESTS)
     enable_testing()
