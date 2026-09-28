@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Strip Claude session-attribution trailers from every commit message.
+msgfile="$1"
+sed -i '' -e '/^Claude-Session: /d' -e '\#^https://claude\.ai/code/#d' "$msgfile" 2>/dev/null \
+  || sed -i -e '/^Claude-Session: /d' -e '\#^https://claude\.ai/code/#d' "$msgfile"
+# Chain to the repository's own commit-msg hook so per-repo hooks keep working.
+repo_hook="$(git rev-parse --git-dir 2>/dev/null)/hooks/commit-msg"
+if [ -n "$repo_hook" ] && [ -x "$repo_hook" ] && [ "$repo_hook" -ef "$0" ] 2>/dev/null; then :; elif [ -n "$repo_hook" ] && [ -x "$repo_hook" ]; then
+  exec "$repo_hook" "$@"
+fi
+exit 0

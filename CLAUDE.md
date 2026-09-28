@@ -30,6 +30,7 @@ Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePole
 | `.clang-*`, `cmake/tanh/`, `hooks/tanh/` | **installed copies** of `tooling/` — never edit (a hook blocks it) |
 | `.github/` | CI: callers, in-repo ci-actions (own `CLAUDE.md`) |
 | `.claude/` | settings, project hooks, the `add-processor` skill |
+| `docs/` | one page per config (presets, clang tools, hooks, CI, …) — update it when a config changes |
 
 ## Rules
 

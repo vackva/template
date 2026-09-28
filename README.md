@@ -1,99 +1,35 @@
 # Agentic C++ template
 
-An example C++20 repo set up for developing with Claude Code: CLAUDE.md files, hooks, a
-plugin, CMake presets, GoogleTest, sanitizers, clang-format/clang-tidy, CI and Codecov.
+An example C++20 repo set up for developing with Claude Code: CLAUDE.md files, hooks, a plugin,
+CMake presets, GoogleTest, sanitizers, clang-format/clang-tidy, CI and Codecov. It follows the
+setup of tanh-lab's projects ([anira](https://github.com/anira-project/anira), tanh-lib,
+cosmos), with everything in this one repo: [tanh-tooling](https://github.com/tanh-lab/tanh-tooling)
+is in `tooling/`, [ci-actions](https://github.com/tanh-lab/ci-actions) in `.github/`.
 
-It follows the setup of tanh-lab's projects ([anira](https://github.com/anira-project/anira),
-tanh-lib, cosmos), with one difference: **everything lives in this repo**.
-[tanh-tooling](https://github.com/tanh-lab/tanh-tooling) is vendored into `tooling/`,
-and [tanh-lab/ci-actions](https://github.com/tanh-lab/ci-actions) into `.github/`. Nothing is
-fetched from a pinned tag, so the whole setup can be read, changed and tested in one place.
-
-The library is small on purpose: `tpl::dsp::Gain` (a smoothed gain) and
-`tpl::dsp::OnePoleLowpass`, both real-time safe.
+The library is small on purpose: `tpl::dsp::Gain` and `tpl::dsp::OnePoleLowpass`, both real-time safe.
 
 ## Quick start
 
 ```sh
-brew install cmake ninja llvm just jq   # or the apt equivalents; clang-format/clang-tidy come with llvm
-just setup                              # arms the pre-push hook, configures build/desktop/Debug
+brew install cmake ninja llvm just jq    # or the apt equivalents
+just setup                               # arms the pre-push hook, configures build/desktop/Debug
 just test
-claude                                  # trust the folder; then: /plugin install tanh-tools@tanh-tooling
+claude                                   # trust the folder, then: /plugin install tanh-tools@tanh-tooling
 ```
 
-## How the pieces fit
+`main` only accepts pull requests with green CI and >= 80% line coverage on every changed file.
 
-```
-you / Claude edit a file
-  │
-  ├─ PreToolUse   .claude/hooks/protect-installed.sh   refuses edits to installed tooling copies
-  ├─ PostToolUse  tanh-tools plugin: check.sh          clang-tidy, then clang-format, on that file
-  ├─ Stop         .claude/hooks/build-and-test.sh      builds + runs ctest; red means Claude keeps working
-  │
-git push
-  └─ hooks/tanh/pre-push                               clang-format + clang-tidy on the pushed diff
-  │
-CI (.github/workflows)
-  ├─ lint         clang-format; installed copies == tooling/
-  ├─ build_test   Linux/macOS/Windows × shared/static/gcc (PRs: a subset)
-  ├─ sanitizers   ASan+UBSan, TSan, RTSan
-  ├─ clang_tidy   changed files on PRs, full sweep on main
-  ├─ coverage     llvm-cov → Codecov; PRs fail if a changed file is < 80% covered
-  ├─ tooling      tests of the CMake modules in tooling/cmake on 3 OSes
-  └─ on_tag       vX.Y.Z: everything in full, then packages for every platform → GitHub Release
-```
+## Docs
 
-### Claude Code
-
-| File | Role |
+| Topic | |
 |---|---|
-| `CLAUDE.md` | commands, layout, rules (naming, real-time safety, symbol policy), what runs automatically |
-| `test/CLAUDE.md`, `tooling/CLAUDE.md`, `.github/CLAUDE.md` | loaded when Claude works in that directory |
-| `.claude/settings.json` | local plugin marketplace (`./tooling`), enabled plugins, permissions, project hooks |
-| `tooling/plugins/tanh-tools/` | the plugin: format/lint hooks, `dsp-reviewer` agent, `crossplatform-audio` skill, GitHub MCP, clangd LSP |
-| `.claude/skills/add-processor/` | project skill: add a processor end to end (header, source, tests, CMake, changelog, review) |
-
-The GitHub MCP server in the plugin reads `GITHUB_TOKEN` from the environment
-(`export GITHUB_TOKEN="$(gh auth token)"`). See the tanh-tooling README for details.
-
-### CMake
-
-- `CMakePresets.json`: `desktop-debug` (dev; its `compile_commands.json` feeds clangd and the
-  hooks), `ci-tests-{shared,static,gcc}`, `windows-msvc-tests-shared`, `ci-tests-coverage`,
-  `desktop-tests-{asan,tsan,rtsan}`.
-- `cmake/tanh/` (installed from `tooling/cmake/`): git-tag versioning, platform detection,
-  symbol policy with an export allowlist, sanitizers, GoogleTest fetch.
-- Shared builds export only `tpl::` symbols; the `tpl_dsp_exports` CTest checks the real
-  export table.
-
-### Codecov
-
-`coverage.yml` uploads through tokenless OIDC; install the
-[Codecov GitHub App](https://github.com/apps/codecov) on the repo. On pull requests every
-changed file under `src/`/`include/` must reach 80% line coverage (CI gate, table in the job
-summary); Codecov adds a patch status (80%) and a PR comment.
-
-### Branch protection
-
-`main` accepts changes only through pull requests, with the five `<name> result` checks green
-and the branch up to date; nobody can bypass it. The ruleset is `.github/rulesets/main.json`:
-
-```sh
-just protect-main <owner>/<repo>
-```
-
-(A merge queue needs an org-owned repo: `tooling/github/apply-merge-queue.sh`.)
-
-### Releases
-
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-`on_tag.yml` runs every check in full, then builds install packages (Linux x86_64/arm64,
-macOS arm64, Windows x64; shared and static) and attaches them to a GitHub Release.
-
-## Changing the shared tooling
-
-Edit `tooling/`, never the installed copies (`.clang-*`, `cmake/tanh/`, `hooks/tanh/`), then
-run `just tooling-install`. `just tooling-check` (and CI) fails on drift. See `tooling/CLAUDE.md`.
+| [Claude Code: your setup](docs/claude-setup.md) | `~/.claude`: global CLAUDE.md, settings, statusline, personal skills |
+| [Claude Code: this repo](docs/claude-project.md) | CLAUDE.md files, `.claude/settings.json`, plugin, skill |
+| [Hooks](docs/hooks.md) | format/lint after edits, build+test on stop, protected files, pre-push |
+| [CMake and presets](docs/cmake.md) | `CMakeLists.txt`, every preset, install package, `justfile` |
+| [clang-format, clang-tidy, clangd](docs/clang-tools.md) | style, naming rules, the language server |
+| [Tests](docs/testing.md) | GoogleTest, CTest, export check |
+| [Sanitizers](docs/sanitizers.md) | ASan/UBSan, TSan, RTSan and `TPL_NONBLOCKING` |
+| [Coverage and Codecov](docs/coverage.md) | llvm-cov, the per-file gate, `codecov.yml` |
+| [CI](docs/ci.md) | workflows, matrices, branch protection, releases |
+| [Shared tooling](docs/tooling.md) | `tooling/`, installed copies, CMake modules |
