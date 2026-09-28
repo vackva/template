@@ -1,8 +1,7 @@
 # CI
 
 Files: `.github/workflows/`, `.github/actions/`, `.github/*_matrix.json`,
-[`.github/rulesets/main.json`](../.github/rulesets/main.json),
-[`.github/CLAUDE.md`](../.github/CLAUDE.md).
+[`.github/rulesets/main.json`](../.github/rulesets/main.json).
 
 ## Two layers
 

@@ -5,24 +5,23 @@ The committed, team-wide half of the Claude Code setup. The personal half (`~/.c
 
 | File | Role |
 |---|---|
-| [`CLAUDE.md`](../CLAUDE.md) | loaded in every session: commands, layout, rules, what runs automatically |
-| [`test/CLAUDE.md`](../test/CLAUDE.md), [`tooling/CLAUDE.md`](../tooling/CLAUDE.md), [`.github/CLAUDE.md`](../.github/CLAUDE.md) | loaded when Claude works in that directory |
+| [`CLAUDE.md`](../CLAUDE.md) | the one project instruction file, loaded in every session |
 | [`.claude/settings.json`](../.claude/settings.json) | plugins, permissions, project hooks |
 | [`.claude/hooks/`](../.claude/hooks/) | protect-installed and build-and-test ([hooks.md](hooks.md)) |
 | [`.claude/skills/add-processor/`](../.claude/skills/add-processor/SKILL.md) | project skill |
 | [`tooling/plugins/tanh-tools/`](../tooling/plugins/tanh-tools/) | the lab plugin |
 | `.claude/settings.local.json` | your own overrides; gitignored |
 
-## CLAUDE.md files
+## CLAUDE.md
 
-The root file is short and concrete: the commands (`just test`, one test binary with a
-filter), the layout, and the rules that tools enforce (naming, real-time safety, symbol policy,
-PR-only `main`, 80% coverage). It also lists what runs automatically, so Claude expects the
-hooks instead of being surprised by them.
+One file at the root, short and concrete: the commands (`just test`, one test binary with a
+filter), the layout, the rules that tools enforce (naming, real-time safety, symbol policy,
+PR-only `main`, 80% coverage), test conventions, how tooling and CI are organised, and what runs
+automatically, so Claude expects the hooks instead of being surprised by them.
 
-Subdirectory files hold rules that only matter there: test conventions in `test/`, "edit the
-source, then reinstall" in `tooling/`, the workflow conventions in `.github/`. They load only
-when Claude reads files in that directory, which keeps the root file small.
+Claude Code also loads `CLAUDE.md` files from subdirectories when it works there. This repo
+keeps a single file on purpose: one place to read and maintain. The long explanations are in
+`docs/`, written for people; `CLAUDE.md` only holds what changes how Claude works.
 
 ## settings.json
 

@@ -1,7 +1,7 @@
 # Tests
 
 Files: [`test/CMakeLists.txt`](../test/CMakeLists.txt), `test/dsp/test_*.cpp`,
-[`test/CLAUDE.md`](../test/CLAUDE.md) (the conventions Claude follows).
+the "Tests" section of [`CLAUDE.md`](../CLAUDE.md) (the conventions Claude follows).
 
 ## GoogleTest through CTest
 

@@ -17,7 +17,7 @@ name: build-sanitizer
 # reports success — the check is decorative. Each sanitizer runtime reads only
 # its own variable, so setting all three on every leg is harmless.
 #
-# Vendored from tanh-lab/ci-actions (see .github/CLAUDE.md): the steps use the
+# Vendored from tanh-lab/ci-actions (see docs/ci.md): the steps use the
 # composite actions in ./.github/actions of the SAME commit, so there is no pin to bump.
 
 on:

@@ -12,7 +12,7 @@ When the two layers disagree, the project wins over the user, and a subdirectory
 
 | # | Piece | Where | Why it matters |
 |---|---|---|---|
-| 1 | `CLAUDE.md` | `~/.claude/CLAUDE.md`, `./CLAUDE.md`, `test/CLAUDE.md`, … | Loaded into every session. Commands, rules and "what I don't want" go here. This is the biggest lever. |
+| 1 | `CLAUDE.md` | `~/.claude/CLAUDE.md`, `./CLAUDE.md` | Loaded into every session. Commands, rules and "what I don't want" go here. This is the biggest lever. |
 | 2 | Hooks | `.claude/settings.json`, plugins | The harness runs them, not the model, so they always happen: format and tidy after an edit, build and test on stop. Use a hook for anything that must never be skipped. |
 | 3 | Skills and plugins | `.claude/skills/`, `tooling/plugins/`, `~/.claude/skills/` | Reusable workflows (`/add-processor`, `/explain-pr`) and bundles of hooks, agents and MCP servers. |
 | 4 | `settings.json` | `~/.claude/`, `.claude/` | Model, effort, permissions, enabled plugins and marketplaces. |
