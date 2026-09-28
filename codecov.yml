@@ -2,15 +2,20 @@
 # over the shared library + test binaries, uploaded as lcov). llvm-cov already drops
 # test/, build/ and fetched code (reusable-coverage.yml, ignore_regex).
 #
-# Codecov is a metric, never a gate: no commit status that can fail a pull request,
-# no bot comment, no inline annotations. The CI checks decide what merges; the number
-# is there when someone wants to look at it.
+# The merge gate is CI's own per-file check (every changed file under src/ or
+# include/ >= 80%, the "coverage result" check). Codecov adds the patch view:
+# the codecov/patch status compares all changed lines together against 80%.
 coverage:
   status:
     project: off
-    patch: off
+    patch:
+      default:
+        target: 80%
+        threshold: 0%
 
-comment: false
+comment:
+  layout: "diff, files"
+  require_changes: false
 
 github_checks:
-  annotations: false
+  annotations: true

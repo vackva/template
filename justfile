@@ -71,3 +71,9 @@ tooling-test:
 # Remove every build directory
 clean:
     rm -rf build
+
+# Create or update the main-branch ruleset on GitHub from .github/rulesets/main.json (needs admin)
+protect-main REPO:
+    id=$(gh api "repos/{{REPO}}/rulesets" -q '.[] | select(.name=="main: pull requests only + required checks") | .id' | head -1); \
+    if [ -n "$id" ]; then gh api -X PUT "repos/{{REPO}}/rulesets/$id" --input .github/rulesets/main.json -q '"updated ruleset " + (.id|tostring)'; \
+    else gh api -X POST "repos/{{REPO}}/rulesets" --input .github/rulesets/main.json -q '"created ruleset " + (.id|tostring)'; fi

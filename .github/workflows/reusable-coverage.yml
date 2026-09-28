@@ -27,6 +27,14 @@ on:
         description: "llvm-cov -ignore-filename-regex for fetched/generated code"
         type: string
         default: "(^|/)(build|modules|extras|test|examples|_deps)/"
+      min_file_coverage:
+        description: "Pull requests only: minimum line coverage in percent for every changed source file inside gate_scope (e.g. '80'). Empty disables the gate. A changed .cpp missing from the report fails too (it is not built into the coverage leg); a header without executable lines is skipped."
+        type: string
+        default: ""
+      gate_scope:
+        description: "Extended regex over repo-relative paths the per-file gate applies to"
+        type: string
+        default: "^(src|include)/"
       models_cache_prefix:
         description: "Cache-key prefix for pre-fetched fixture trees; the full key is <prefix>-hashFiles(models_hash_glob). Empty skips the restore. (hashFiles is step-scoped, so callers cannot compute the key themselves.)"
         type: string
@@ -172,3 +180,16 @@ jobs:
           use_oidc: true
           files: coverage.lcov
           fail_ci_if_error: true
+      # After the upload on purpose: Codecov gets the numbers even when the gate fails.
+      - name: list the pull request's changed files
+        id: changed
+        if: inputs.min_file_coverage != '' && github.event_name == 'pull_request'
+        uses: ./.github/actions/changed-files
+      - name: per-file coverage gate
+        if: steps.changed.outcome == 'success'
+        env:
+          MIN: ${{ inputs.min_file_coverage }}
+          SCOPE: ${{ inputs.gate_scope }}
+          FILES: ${{ steps.changed.outputs.files }}
+          SWEEP: ${{ steps.changed.outputs.sweep }}
+        run: python3 .github/scripts/coverage_gate.py coverage.lcov

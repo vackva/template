@@ -33,6 +33,9 @@ Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePole
 
 ## Rules
 
+- **`main` only changes through pull requests** (GitHub ruleset, no bypass): work on a branch,
+  push it, open a PR. Required: lint, build_test, sanitizers, clang_tidy, coverage — and every
+  changed file under `src/`/`include/` needs >= 80% line coverage, so new code comes with tests.
 - **Naming** (enforced by `.clang-tidy`): `PascalCase` types, `snake_case` functions and
   variables, `m_` members, `k_` constants, `PascalCase` enum values. Files: `PascalCase.h/.cpp`.
 - **Real-time safety**: `process()` is `noexcept TPL_NONBLOCKING` and must not allocate, lock,

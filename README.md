@@ -38,8 +38,9 @@ CI (.github/workflows)
   ├─ build_test   Linux/macOS/Windows × shared/static/gcc (PRs: a subset)
   ├─ sanitizers   ASan+UBSan, TSan, RTSan
   ├─ clang_tidy   changed files on PRs, full sweep on main
-  ├─ coverage     llvm-cov → Codecov (a metric, never a gate)
-  └─ tooling      tests of the CMake modules in tooling/cmake on 3 OSes
+  ├─ coverage     llvm-cov → Codecov; PRs fail if a changed file is < 80% covered
+  ├─ tooling      tests of the CMake modules in tooling/cmake on 3 OSes
+  └─ on_tag       vX.Y.Z: everything in full, then packages for every platform → GitHub Release
 ```
 
 ### Claude Code
@@ -67,18 +68,30 @@ The GitHub MCP server in the plugin reads `GITHUB_TOKEN` from the environment
 
 ### Codecov
 
-`coverage.yml` uploads through tokenless OIDC. To turn it on: install the
-[Codecov GitHub App](https://github.com/apps/codecov) on the org/repo. `codecov.yml` turns
-status checks and PR comments off.
+`coverage.yml` uploads through tokenless OIDC; install the
+[Codecov GitHub App](https://github.com/apps/codecov) on the repo. On pull requests every
+changed file under `src/`/`include/` must reach 80% line coverage (CI gate, table in the job
+summary); Codecov adds a patch status (80%) and a PR comment.
 
 ### Branch protection
 
-Every workflow ends in a single `<name> result` job. Require those:
+`main` accepts changes only through pull requests, with the five `<name> result` checks green
+and the branch up to date; nobody can bypass it. The ruleset is `.github/rulesets/main.json`:
 
 ```sh
-sh tooling/github/apply-merge-queue.sh <owner>/<repo> \
-  "lint result" "build_test result" "sanitizer result" "clang_tidy result" "coverage result"
+just protect-main <owner>/<repo>
 ```
+
+(A merge queue needs an org-owned repo: `tooling/github/apply-merge-queue.sh`.)
+
+### Releases
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`on_tag.yml` runs every check in full, then builds install packages (Linux x86_64/arm64,
+macOS arm64, Windows x64; shared and static) and attaches them to a GitHub Release.
 
 ## Changing the shared tooling
 

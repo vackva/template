@@ -9,6 +9,12 @@ on:
   merge_group:
   push:
     branches: [main]
+  workflow_call:
+    inputs:
+      tier:
+        description: "Matrix tier: 'full' (default) or 'pr'"
+        type: string
+        default: "full"
   workflow_dispatch:
     inputs:
       tier:
