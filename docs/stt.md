@@ -109,8 +109,9 @@ streaming step gates the model with a voice-activity detector.
 ## Sanitizers
 
 The suite, inference included, runs in about 10 s under ASan+UBSan and TSan and passes RTSan.
-Use upstream LLVM for them: Apple clang's ASan runtime deadlocks during start-up once the
-ONNX Runtime dylib is mapped (`__asan::InitializeShadowMemory` spinning on its own lock), and
+Use upstream LLVM for them: on macOS 26.6 Apple clang 17's ASan and TSan runtimes hang during
+start-up in every test binary, `test_dsp` included (`__asan::InitializeShadowMemory` ->
+`get_dyld_hdr` -> `dyld_shared_cache_iterate_text_swift`), and
 Apple clang has no RTSan. CI uses LLVM 20 on Ubuntu.
 
 ```sh
@@ -131,8 +132,37 @@ GitHub's free plan includes 10 GB of LFS bandwidth a month. A new model version 
 merge (main cannot read a pull request's caches). Every clone that runs LFS smudge downloads
 it too; `GIT_LFS_SKIP_SMUDGE=1 git clone ...` skips that.
 
+## Streaming: `StreamingTranscriber`
+
+`tpl::stt::StreamingTranscriber` implements the `tpl::stt::SegmentSource` hand-off
+([`Segment.h`](../include/tpl/stt/Segment.h)) that the transcription app consumes:
+
+| Thread | Work | Real-time safe |
+|---|---|---|
+| audio | `push_audio()`: host rate -> 16 kHz ([`Resampler`](../include/tpl/stt/Resampler.h), windowed sinc, cut-off 7.6 kHz), write a lock-free [`SpscRing`](../include/tpl/stt/SpscRing.h) (drops when full, never blocks) | yes, `TPL_NONBLOCKING`, checked by RTSan |
+| worker (owned) | Silero VAD v6.2.3 per 512 samples -> [`VadSegmenter`](../include/tpl/stt/VadSegmenter.h) (0.5 s pause ends a segment, 30 s maximum, 0.4 s padding) -> Parakeet -> words -> output queue | no |
+| any other | `pop_segment()`, `reset()` (flush the open segment, positions restart at 0) | no |
+
+The inference thread does nothing but VAD and inference: resampling happens on the audio
+thread. All instances in one process share one Parakeet model (a registry keyed by model
+folder), inference serialised on a mutex; the 700 MB load happens once. Models load on the
+worker; `state()` reports `Loading` / `Ready` / `Failed`.
+
+Silero VAD (MIT, 2.3 MB) lives in `models/silero-vad-v6.2.3/` (Git LFS) and installs next to
+Parakeet (`default_vad_model()`).
+
+Measured on the test clips, 48 kHz host rate, pushed faster than real time: every clip becomes
+one segment at the right place and stays within the offline WER bounds. Cutting segments close
+to the speech onset and a 7.2 kHz resampler cut-off each cost German words on
+`de_mls_4705_13109_000003`; the 0.4 s padding and 7.6 kHz cut-off recover them.
+
 ## Known gaps
 
+- anira provides ONNX Runtime only: resampling, the ring and the worker are this library's own.
+  Silero VAD (fixed 512-sample blocks, recurrent state) is the part that maps onto anira's
+  `InferenceHandler`; Parakeet's variable-length segments do not without a custom backend.
+- The model detects the language itself; the app's EN/DE setting is stored with the session but
+  cannot steer Parakeet v3.
 - `tpl_stt` is not part of the installed CMake package yet (`cmake/install.cmake` exports
   `tpl::dsp` only).
 - anira and the tanh-lib it fetches carry tanh-tooling 0.1.5 CMake modules against this repo's

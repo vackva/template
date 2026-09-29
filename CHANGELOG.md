@@ -22,6 +22,18 @@ All notable changes to this project are documented here. The format follows
 - `tpl-transcribe` example (`examples/transcribe_file`): transcribes a WAV file, prints the RTF.
 - anira v2.3.0 as a submodule (`third_party/anira`); options `TPL_WITH_STT`, `TPL_WITH_EXAMPLES`.
 
+- `tpl::stt::StreamingTranscriber`: the streaming backend (`SegmentSource`): resampling on the
+  audio thread (`Resampler`, `SpscRing`), Silero VAD v6.2.3 segmentation (`VadSegmenter`),
+  Parakeet per segment, words with sample times; one shared model per process.
+- `tpl::stt::Segment` / `SegmentSource`: the hand-off between the backend and its consumers.
+- `tpl_transcript`: `TranscriptStore` (SQLite, WAL, FTS5 search ignoring case and diacritics,
+  retention, crash recovery), `TranscriptionService` (sessions per Record/Stop, rollover),
+  `SegmentCache`, `RowIndex`, `ParagraphLayout`, txt/md/srt export, `Settings`
+  (`TPL_DATA_DIR` override), `ReplaySegmentSource`.
+- Transcriber app (`apps/transcriber`, JUCE 9.0.3): VST3/AU plugin and standalone app with
+  sessions sidebar, search, virtualised transcript view, settings panel; option `TPL_WITH_APP`,
+  presets `ci-app` / `windows-msvc-app`, app build rows in CI.
+
 ### Changed
 
 - `tpl_add_test()` takes `SOURCES` and `LIBS`; coverage covers every `libtpl_*` library.
