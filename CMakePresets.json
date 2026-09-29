@@ -150,6 +150,15 @@
         "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl"
       }
+    },
+    {
+      "name": "ci-tidy",
+      "displayName": "clang-tidy CI: desktop-debug without the JUCE app",
+      "inherits": "desktop-debug",
+      "binaryDir": "${sourceDir}/build/ci/tidy",
+      "cacheVariables": {
+        "TPL_WITH_APP": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -204,6 +213,10 @@
     {
       "name": "windows-msvc-app",
       "configurePreset": "windows-msvc-app"
+    },
+    {
+      "name": "ci-tidy",
+      "configurePreset": "ci-tidy"
     }
   ],
   "testPresets": [
@@ -281,6 +294,11 @@
     {
       "name": "windows-msvc-app",
       "configurePreset": "windows-msvc-app",
+      "inherits": "test-base"
+    },
+    {
+      "name": "ci-tidy",
+      "configurePreset": "ci-tidy",
       "inherits": "test-base"
     }
   ]

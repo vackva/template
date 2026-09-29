@@ -1,11 +1,15 @@
 #include "tpl/transcript/Settings.h"
 
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <ios>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
+#if defined(THL_PLATFORM_WINDOWS)
+#include <memory>
+#endif
 #include <stdexcept>
 #include <string>
 
@@ -14,10 +18,21 @@ namespace tpl::transcript {
 namespace {
 
 std::filesystem::path env_path(const char* name) {
+#if defined(THL_PLATFORM_WINDOWS)
+    // MSVC deprecates getenv (C4996, an error under /WX). The wide variant also keeps
+    // non-ASCII paths intact; _wdupenv_s allocates the copy.
+    const std::wstring wide_name(name, name + std::char_traits<char>::length(name));
+    wchar_t* value = nullptr;
+    std::size_t size = 0;
+    if (_wdupenv_s(&value, &size, wide_name.c_str()) != 0 || value == nullptr) { return {}; }
+    const std::unique_ptr<wchar_t, decltype(&std::free)> owned(value, &std::free);
+    return *value != L'\0' ? std::filesystem::path(value) : std::filesystem::path{};
+#else
     // NOLINTNEXTLINE(concurrency-mt-unsafe): read once at startup, nothing sets env vars
     const char* value = std::getenv(name);
     return value != nullptr && *value != '\0' ? std::filesystem::path(value)
                                               : std::filesystem::path{};
+#endif
 }
 
 }  // namespace

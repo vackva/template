@@ -32,12 +32,14 @@ jobs:
           submodules: true # third_party/anira
       - uses: ./.github/actions/setup-cpp-build-tools
       # clang-tidy needs compile_commands.json and the fetched googletest headers.
+      # ci-tidy = desktop-debug without the JUCE app: tidy checks src/ and test/ only,
+      # and the app would need JUCE's Linux packages.
       - uses: ./.github/actions/cmake-build
         with:
-          PRESET: desktop-debug
+          PRESET: ci-tidy
       - uses: ./.github/actions/clang-tidy-check
         with:
-          PRESET: desktop-debug
+          PRESET: ci-tidy
           SOURCES: "src/ test/"
           CHANGED_FILES_ONLY: "true"
           FULL_SWEEP_PATTERN: '^\.clang-tidy$|^tooling/clang/clang-tidy$|^\.github/workflows/clang_tidy\.yml$'
