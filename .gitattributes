@@ -1,2 +1,5 @@
+# Model directory byte for byte on every OS: CI keys the model cache on the hash of
+# models/*/manifest.json, and a CRLF checkout on Windows would change that hash.
+models/** -text
 # Exported Parakeet model (scripts/export-parakeet): stored in Git LFS, CI restores it from a cache.
 models/**/*.onnx filter=lfs diff=lfs merge=lfs -text
