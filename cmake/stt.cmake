@@ -66,8 +66,13 @@ if(TPL_WITH_EXAMPLES OR TPL_WITH_TESTS)
         URL https://github.com/mackron/dr_libs/archive/dfe8377631000664666519fdb83da193fd8037f4.tar.gz
         URL_HASH SHA256=4654acb029f4f2a43ac2edb60c4cb09f40615b4b5bee9709954f910cb979e5fd)
     FetchContent_MakeAvailable(dr_libs)
-    add_library(tpl_dr_wav INTERFACE)
-    target_include_directories(tpl_dr_wav SYSTEM INTERFACE ${dr_libs_SOURCE_DIR})
+    # The implementation is compiled once, here, with warnings off: it is third-party code
+    # and MSVC /W4 /WX rejects it (C4701) in any target that defines DR_WAV_IMPLEMENTATION.
+    set(_dr_wav_impl ${PROJECT_BINARY_DIR}/dr_wav_impl.cpp)
+    file(WRITE ${_dr_wav_impl} "#define DR_WAV_IMPLEMENTATION\n#include <dr_wav.h>\n")
+    add_library(tpl_dr_wav STATIC ${_dr_wav_impl})
+    target_include_directories(tpl_dr_wav SYSTEM PUBLIC ${dr_libs_SOURCE_DIR})
+    target_compile_options(tpl_dr_wav PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>)
 endif()
 
 if(TPL_WITH_EXAMPLES)

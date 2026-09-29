@@ -5,7 +5,6 @@
 // Prints the transcript, then load time and real-time factor (RTF = compute time / audio
 // duration, averaged over --repeat runs) — the local CPU benchmark.
 
-#define DR_WAV_IMPLEMENTATION
 #include <dr_wav.h>
 
 #include <charconv>
