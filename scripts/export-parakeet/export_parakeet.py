@@ -2,6 +2,7 @@
 
     uv run export_parakeet.py export <model_dir>          # NeMo -> ONNX -> int8, vocab, manifest
     uv run export_parakeet.py golden <model_dir> <clips>  # reference transcripts via onnx-asr
+    uv run export_parakeet.py detokenize <model_dir> <out.json>  # reference detokenisation
 
 The model directory holds exactly what tpl::stt::Transcriber loads:
 
@@ -155,6 +156,68 @@ def cmd_golden(args: argparse.Namespace) -> None:
     (clips_dir / "golden.json").write_text(json.dumps(golden, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def onnx_asr_decoder(model_dir: Path):
+    """onnx-asr's own token -> text step (the model object that owns it)."""
+    import onnx_asr  # noqa: PLC0415
+
+    model = onnx_asr.load_model(
+        ONNX_ASR_MODEL,
+        model_dir,
+        quantization="int8",
+        providers=["CPUExecutionProvider"],
+        preprocessor_config={"use_numpy_preprocessors": False},
+    )
+    asr = getattr(model, "asr", model)
+    return lambda ids: asr._decode_tokens(ids, None, None).text  # noqa: SLF001 - the reference itself
+
+
+def cmd_detokenize(args: argparse.Namespace) -> None:
+    """Token sequences covering the whole vocabulary, decoded by onnx-asr, for the C++ tests.
+
+    - every token (blank excepted) at least once, shuffled into sequences of 1-12 tokens
+    - random sequences of 1-40 tokens, a third of them drawn from the tokens that make
+      joining hard: the bare word marker, marker + punctuation, punctuation, specials
+    - the token streams of the golden transcripts
+    """
+    import random  # noqa: PLC0415
+
+    decode = onnx_asr_decoder(args.model_dir)
+    tokens = [
+        line.rsplit(" ", 1)[0] for line in (args.model_dir / "vocab.txt").read_text(encoding="utf-8").splitlines()
+    ]
+    blank = len(tokens) - 1
+    marker = "\u2581"
+    tricky = [
+        i
+        for i, t in enumerate(tokens[:blank])
+        if t == marker
+        or t.startswith("<")
+        or not any(c.isalnum() for c in t.replace(marker, ""))
+    ]
+
+    rng = random.Random(20260929)
+    ids = list(range(blank))
+    rng.shuffle(ids)
+    sequences: list[list[int]] = []
+    while ids:
+        n = rng.randint(1, 12)
+        sequences.append(ids[:n])
+        ids = ids[n:]
+    for _ in range(1500):
+        sequence = []
+        for _ in range(rng.randint(1, 40)):
+            pool = tricky if rng.random() < 0.33 else range(blank)
+            sequence.append(rng.choice(pool))
+        sequences.append(sequence)
+    golden_file = args.out.parent / "golden.json"
+    if golden_file.exists():
+        sequences += [clip["token_ids"] for clip in json.loads(golden_file.read_text(encoding="utf-8"))]
+
+    cases = [{"ids": sequence, "text": decode(sequence)} for sequence in sequences]
+    args.out.write_text(json.dumps(cases, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    print(f"{len(cases)} cases, {len(tricky)} tricky tokens -> {args.out}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -167,6 +230,11 @@ def main() -> None:
     golden.add_argument("model_dir", type=Path)
     golden.add_argument("clips_dir", type=Path)
     golden.set_defaults(func=cmd_golden)
+
+    detokenize = sub.add_parser("detokenize", help="write the reference detokenisation cases")
+    detokenize.add_argument("model_dir", type=Path)
+    detokenize.add_argument("out", type=Path)
+    detokenize.set_defaults(func=cmd_detokenize)
 
     args = parser.parse_args()
     args.func(args)

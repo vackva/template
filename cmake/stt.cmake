@@ -40,7 +40,8 @@ add_library(tpl_stt
     src/stt/TdtGreedyDecoder.cpp
     src/stt/Transcriber.cpp
     src/stt/VadSegmenter.cpp
-    src/stt/Vocabulary.cpp)
+    src/stt/Vocabulary.cpp
+    src/stt/Words.cpp)
 add_library(tpl::stt ALIAS tpl_stt)
 target_include_directories(tpl_stt PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>

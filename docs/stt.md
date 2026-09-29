@@ -156,6 +156,15 @@ one segment at the right place and stays within the offline WER bounds. Cutting 
 to the speech onset and a 7.2 kHz resampler cut-off each cost German words on
 `de_mls_4705_13109_000003`; the 0.4 s padding and 7.6 kHz cut-off recover them.
 
+## How the tokens and text are tested
+
+| Test | What it proves |
+|---|---|
+| `Vocabulary.DecodeMatchesOnnxAsrForTheWholeVocabulary` | `decode()` equals onnx-asr's detokeniser byte for byte on 2721 cases covering every token of the vocabulary (`test/data/stt/detokenize_golden.json`, written by `export_parakeet.py detokenize`), random mixes of the hard ones (bare `▁`, `▁-`, punctuation, special tokens, Cyrillic, Greek) and the real transcripts |
+| `Words.InvariantsHoldForEveryReferenceCase` | on the same cases, `words_from_tokens()` gives the text split at its spaces, in order, timed inside the segment |
+| `StreamingTranscriberTest.RealTimePathMatchesOfflineExactlyAt16k` / `...At48k` | the samples each segment was transcribed from are bit for bit the input at the reported positions (ring, VAD chunking, trimming, resampling), and text and words equal the offline `Transcriber` on those samples; host blocks of random size (1 - 1023) at 16 kHz, 480 at 48 kHz. Dropping one sample in the worker fails both. |
+| `TranscriberTest.MatchesGoldenOnnxAsrOutput` | the offline C++ path against onnx-asr's (at most 5 % of tokens may differ across CPU architectures) |
+
 ## Known gaps
 
 - anira provides ONNX Runtime only: resampling, the ring and the worker are this library's own.

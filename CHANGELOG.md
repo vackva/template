@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format follows
 - `tpl::stt::StreamingTranscriber`: the streaming backend (`SegmentSource`): resampling on the
   audio thread (`Resampler`, `SpscRing`), Silero VAD v6.2.3 segmentation (`VadSegmenter`),
   Parakeet per segment, words with sample times; one shared model per process.
+- `tpl::stt::words_from_tokens()`: words are the decoded text split at its spaces (a bare `▁` or
+  marker + punctuation no longer makes a separate word); `StreamingConfig::m_segment_audio`
+  taps the samples each segment is transcribed from.
+- Tests: `Vocabulary::decode` against onnx-asr for every token of the vocabulary, and the
+  streaming path against the offline path, bit for bit, at 16 and 48 kHz.
 - `tpl::stt::Segment` / `SegmentSource`: the hand-off between the backend and its consumers.
 - `tpl_transcript`: `TranscriptStore` (SQLite, WAL, FTS5 search ignoring case and diacritics,
   retention, crash recovery), `TranscriptionService` (sessions per Record/Stop, rollover),

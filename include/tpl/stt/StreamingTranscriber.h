@@ -2,7 +2,9 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -26,6 +28,9 @@ struct StreamingConfig {
     int m_num_threads = 1;  ///< ONNX Runtime threads for Parakeet
     VadConfig m_vad;
     double m_ring_seconds = 60.0;  ///< 16 kHz audio buffered while the worker transcribes
+    /// Optional, worker thread: the exact 16 kHz samples each segment is transcribed from and
+    /// the position of the first one. For tests (audio integrity) and for keeping segment audio.
+    std::function<void(std::int64_t start_sample, std::span<const float> samples)> m_segment_audio;
 };
 
 /// The streaming speech-to-text backend (accurate tier): a SegmentSource that cuts the
