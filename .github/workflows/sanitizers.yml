@@ -22,6 +22,10 @@ jobs:
     uses: ./.github/workflows/reusable-sanitizer.yml
     with:
       matrix_file: .github/sanitizer_matrix.json
+      models_cache_prefix: stt-models
+      models_hash_glob: models/*/manifest.json
+      models_cache_paths: models/*/*.onnx
+      models_lfs_include: "models/**/*.onnx"
 
   result:
     name: sanitizer result

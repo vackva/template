@@ -1,0 +1,6 @@
+{
+  "model_type": "nemo-conformer-tdt",
+  "features_size": 128,
+  "subsampling_factor": 8,
+  "max_tokens_per_step": 10
+}

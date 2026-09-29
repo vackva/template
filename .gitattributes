@@ -1,0 +1,2 @@
+# Exported Parakeet model (scripts/export-parakeet): stored in Git LFS, CI restores it from a cache.
+models/**/*.onnx filter=lfs diff=lfs merge=lfs -text

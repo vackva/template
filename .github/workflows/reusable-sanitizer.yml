@@ -59,6 +59,10 @@ on:
         description: "Newline-separated cache paths matching the key"
         type: string
         default: ""
+      models_lfs_include:
+        description: "git lfs pull --include pattern for models tracked in Git LFS: on a cache miss the plan job pulls them and saves the cache (.github/actions/models-cache). Empty: restore only."
+        type: string
+        default: ""
 
 env:
   SCCACHE_GHA_ENABLED: "true"
@@ -73,6 +77,15 @@ jobs:
       matrix: ${{ steps.read.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+      - name: models
+        if: inputs.models_cache_prefix != '' && inputs.models_lfs_include != ''
+        uses: ./.github/actions/models-cache
+        with:
+          CACHE_PREFIX: ${{ inputs.models_cache_prefix }}
+          HASH_GLOB: ${{ inputs.models_hash_glob }}
+          PATHS: ${{ inputs.models_cache_paths }}
+          LFS_INCLUDE: ${{ inputs.models_lfs_include }}
+          SAVE: "true"
       - name: read the matrix
         id: read
         shell: bash
@@ -98,18 +111,15 @@ jobs:
           submodules: true
           fetch-depth: 0
           fetch-tags: true
-      - name: restore the model fixtures
+      - name: models
         if: matrix.models && inputs.models_cache_prefix != ''
-        id: models
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/models-cache
         with:
-          path: ${{ inputs.models_cache_paths }}
-          key: ${{ inputs.models_cache_prefix }}-${{ hashFiles(inputs.models_hash_glob) }}
-          enableCrossOsArchive: true
-      - name: note a fixture-cache miss
-        if: matrix.models && inputs.models_cache_prefix != '' && steps.models.outputs.cache-hit != 'true'
-        shell: bash
-        run: echo "models cache MISS — the configure fetches the pins itself" | tee -a "$GITHUB_STEP_SUMMARY"
+          CACHE_PREFIX: ${{ inputs.models_cache_prefix }}
+          HASH_GLOB: ${{ inputs.models_hash_glob }}
+          PATHS: ${{ inputs.models_cache_paths }}
+          LFS_INCLUDE: ${{ inputs.models_lfs_include }}
+          SAVE: "false"
       - name: setup build tools
         uses: ./.github/actions/setup-cpp-build-tools
         with:

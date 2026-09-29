@@ -51,7 +51,17 @@ protection requires those, not the individual legs, because leg names change wit
 | `pr` | `true`: also runs on pull requests; others only on `main`, tags, manual runs |
 | `vcvars` | MSVC environment (Ninja needs `cl.exe` from a vcvars shell) |
 
-[`sanitizer_matrix.json`](../.github/sanitizer_matrix.json): `{ name, preset }` per sanitizer.
+[`sanitizer_matrix.json`](../.github/sanitizer_matrix.json): `{ name, preset, models }` per
+sanitizer; `models: true` restores the model cache for that leg.
+
+## Models in Git LFS
+
+The speech-to-text model is in Git LFS, and the checkout leaves LFS files as pointers.
+[`actions/models-cache`](../.github/actions/models-cache/action.yml) restores them from the
+Actions cache; on a miss one job per workflow (the plan job of build_test and sanitizers, the
+coverage job) runs `git lfs pull` and saves the cache. The callers pass `models_cache_prefix`,
+`models_hash_glob` (`models/*/manifest.json`), `models_cache_paths` and `models_lfs_include`.
+Bandwidth budget: [stt.md](stt.md#ci-and-git-lfs-bandwidth).
 
 ## Branch protection
 

@@ -25,7 +25,10 @@ tanh_set_export_allowlist(tpl_dsp NAMESPACE tpl)    # shared lib exports only tp
 | `TPL_WITH_TESTS` | on when top-level | builds `test/` |
 | `TPL_WITH_INSTALL` | on when top-level | install rules + `tpl` CMake package |
 | `TPL_SANITIZERS` | empty | e.g. `asan;ubsan`, applied to `tpl_dsp` and everything linking it ([sanitizers.md](sanitizers.md)) |
-| `BUILD_SHARED_LIBS` | off | shared or static `tpl_dsp` |
+| `BUILD_SHARED_LIBS` | off | shared or static `tpl_dsp` / `tpl_stt` |
+| `TPL_WITH_STT` | on | `tpl_stt` and anira (`third_party/anira`, ONNX Runtime) ([stt.md](stt.md)) |
+| `TPL_WITH_EXAMPLES` | on when top-level | `examples/` (`tpl-transcribe`) |
+| `TPL_STT_MODEL_DIR` / `TPL_STT_MODEL_INSTALL_DIR` | `models/parakeet-…` / system-wide | model the tests use / where `--component stt_model` installs it |
 
 Branch on `TANH_OPERATING_SYSTEM` / `TANH_BINARY_FORMAT`, not `APPLE` / `UNIX` / `WIN32`:
 `APPLE` is true for macOS and iOS, `UNIX` for Linux, macOS and Android. Most linker questions
@@ -85,4 +88,5 @@ A version tag zips exactly this per platform ([ci.md](ci.md#releases)).
 
 `just` recipes are shortcuts over the presets (`just build`, `just test`, `just sanitize tsan`,
 `just coverage`, …) plus a few non-CMake tasks (`just setup`, `just tooling-check`).
-`just --list` shows them all. Nothing in CI depends on `just`.
+`just --list` shows them all. Nothing in CI depends on `just`. `just model` and
+`just install-model` fetch and install the speech-to-text model ([stt.md](stt.md)).

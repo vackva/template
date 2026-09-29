@@ -1,0 +1,19 @@
+[project]
+name = "export-parakeet"
+version = "0.1.0"
+description = "Export nvidia/parakeet-tdt-0.6b-v3 to int8 ONNX for tpl_stt and write the golden test transcripts"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "nemo_toolkit[asr]==2.7.3",
+    "onnx==1.22.0",
+    "onnxruntime==1.26.0",
+    "onnx-asr==0.12.0",
+    "soundfile==0.14.0",
+]
+
+[tool.uv]
+package = false
+# The runtime tpl_stt ships (anira v2.3.0 bundles ONNX Runtime 1.26.0). onnx-asr 0.12.0
+# excludes 1.26.0 without a stated reason; the golden transcripts must come from the
+# version the C++ library runs.
+override-dependencies = ["onnxruntime==1.26.0"]

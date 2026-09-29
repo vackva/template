@@ -34,6 +34,10 @@ jobs:
     with:
       tier: ${{ inputs.tier || '' }}
       matrix_file: .github/build_test_matrix.json
+      models_cache_prefix: stt-models
+      models_hash_glob: models/*/manifest.json
+      models_cache_paths: models/*/*.onnx
+      models_lfs_include: "models/**/*.onnx"
 
   # The one status branch protection requires; called jobs report under a prefixed
   # name ("build_test / build_test result"), this keeps the exact context.

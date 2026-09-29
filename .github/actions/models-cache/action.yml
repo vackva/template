@@ -1,0 +1,67 @@
+name: models-cache
+description: "Restore model files from the Actions cache; on a miss pull them from Git LFS and, with SAVE, store them under the same key"
+
+# The checkout leaves Git LFS files as pointers (actions/checkout: lfs false), so a
+# model tracked in LFS reaches a job only through this action. Every job restores
+# the cache; one job per workflow run (the plan job, or coverage's single job)
+# passes SAVE, so a new model version is downloaded from LFS once per workflow and
+# ref scope instead of once per matrix leg. GitHub's free LFS bandwidth is 10 GB a
+# month — see docs/stt.md.
+#
+# Pull request runs can read caches saved on main; main cannot read a pull
+# request's caches, so a merge that changes the model downloads it once more.
+
+inputs:
+  CACHE_PREFIX:
+    description: "Cache-key prefix; the key is <prefix>-hashFiles(HASH_GLOB)"
+    required: true
+  HASH_GLOB:
+    description: "Files hashed into the key (a manifest listing the model files' hashes)"
+    required: true
+  PATHS:
+    description: "Newline-separated cache paths"
+    required: true
+  LFS_INCLUDE:
+    description: "git lfs pull --include pattern used on a miss; empty keeps the old behaviour (note the miss, the configure fetches its pins itself)"
+    required: false
+    default: ""
+  SAVE:
+    description: "'true': save the cache after an LFS pull"
+    required: false
+    default: "false"
+
+outputs:
+  cache-hit:
+    description: "'true' when the cache was restored"
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: restore the models
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ inputs.PATHS }}
+        key: ${{ inputs.CACHE_PREFIX }}-${{ hashFiles(inputs.HASH_GLOB) }}
+        enableCrossOsArchive: true
+    - name: pull the models from Git LFS
+      if: steps.restore.outputs.cache-hit != 'true' && inputs.LFS_INCLUDE != ''
+      shell: bash
+      env:
+        LFS_INCLUDE: ${{ inputs.LFS_INCLUDE }}
+      run: |
+        echo "models cache MISS — pulling '$LFS_INCLUDE' from Git LFS" | tee -a "$GITHUB_STEP_SUMMARY"
+        git lfs install --local
+        git lfs pull --include "$LFS_INCLUDE"
+    - name: note a cache miss
+      if: steps.restore.outputs.cache-hit != 'true' && inputs.LFS_INCLUDE == ''
+      shell: bash
+      run: echo "models cache MISS — the configure fetches the pins itself" | tee -a "$GITHUB_STEP_SUMMARY"
+    - name: save the models
+      if: steps.restore.outputs.cache-hit != 'true' && inputs.LFS_INCLUDE != '' && inputs.SAVE == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ inputs.PATHS }}
+        key: ${{ inputs.CACHE_PREFIX }}-${{ hashFiles(inputs.HASH_GLOB) }}
+        enableCrossOsArchive: true

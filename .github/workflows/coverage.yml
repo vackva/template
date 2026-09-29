@@ -29,7 +29,12 @@ jobs:
       id-token: write # Codecov's tokenless OIDC upload
     with:
       preset: ci-tests-coverage
-      lib_pattern: "libtpl_dsp.so*"
+      lib_pattern: "libtpl_*.so*"
+      ignore_regex: "(^|/)(build|modules|extras|test|examples|_deps|third_party)/"
+      models_cache_prefix: stt-models
+      models_hash_glob: models/*/manifest.json
+      models_cache_paths: models/*/*.onnx
+      models_lfs_include: "models/**/*.onnx"
       min_file_coverage: "80"
 
   result:

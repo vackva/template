@@ -1,0 +1,33 @@
+{
+  "source_model": "nvidia/parakeet-tdt-0.6b-v3",
+  "source_license": "CC-BY-4.0",
+  "frontend_license": "MIT (onnx-asr, Ilya Stupakov)",
+  "tools": {
+    "nemo_toolkit": "2.7.3",
+    "onnx": "1.22.0",
+    "onnxruntime": "1.26.0",
+    "onnx-asr": "0.12.0"
+  },
+  "files": {
+    "nemo128.onnx": {
+      "bytes": 138824,
+      "sha256": "5b4a84c52eeaa615dc46d781cc7e4598f9b432184831d57493c48adcd01371a9"
+    },
+    "encoder-model.int8.onnx": {
+      "bytes": 652282012,
+      "sha256": "2fcac7794282c7aea0a0377758e0f21e7112cf6d425049d157f1d45bedf6a596"
+    },
+    "decoder_joint-model.int8.onnx": {
+      "bytes": 18202004,
+      "sha256": "eea7483ee3d1a30375daedc8ed83e3960c91b098812127a0d99d1c8977667a70"
+    },
+    "vocab.txt": {
+      "bytes": 93939,
+      "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+    },
+    "config.json": {
+      "bytes": 121,
+      "sha256": "db59e29a3c1fde6a081bf04965e72bba26cd65be1aee65b064360df8aef468e5"
+    }
+  }
+}
