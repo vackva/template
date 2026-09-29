@@ -15,7 +15,6 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -25,46 +24,15 @@
 #include "tpl/stt/Segment.h"
 #include "tpl/stt/Transcriber.h"
 #include "tpl/stt/VadSegmenter.h"
-#include "tpl/stt/Vocabulary.h"
+#include "tpl/stt/Words.h"
 
 namespace tpl::stt {
 
 namespace {
 
-constexpr std::string_view k_word_marker = "\xE2\x96\x81";  // "▁"
 constexpr auto k_idle_wait = std::chrono::milliseconds(10);
-// 10 ms feature hop x subsampling 8 = 80 ms per encoder frame.
-constexpr std::int64_t k_samples_per_frame = 1280;
 // Trim the kept audio once this much lies before what the VAD may still need.
 constexpr std::int64_t k_trim_slack = k_segment_sample_rate;
-
-/// Groups Parakeet tokens into words: a token starting with "▁" starts a new word.
-std::vector<Word> words_of(const Transcript& transcript,
-                           const Vocabulary& vocabulary,
-                           std::int64_t segment_start,
-                           std::int64_t segment_end) {
-    std::vector<std::vector<std::int32_t>> groups;
-    std::vector<std::int64_t> starts;
-    for (const auto& token : transcript.m_tokens) {
-        const bool starts_word =
-            groups.empty() || vocabulary.token(token.m_id).starts_with(k_word_marker);
-        if (starts_word) {
-            groups.emplace_back();
-            starts.push_back(segment_start +
-                             static_cast<std::int64_t>(token.m_frame) * k_samples_per_frame);
-        }
-        groups.back().push_back(token.m_id);
-    }
-    std::vector<Word> words;
-    words.reserve(groups.size());
-    for (std::size_t i = 0; i < groups.size(); ++i) {
-        const auto end = i + 1 < groups.size() ? starts[i + 1] : segment_end;
-        words.push_back({.m_text = vocabulary.decode(groups[i]),
-                         .m_start_sample = starts[i],
-                         .m_end_sample = std::max(starts[i], std::min(end, segment_end))});
-    }
-    return words;
-}
 
 /// One Parakeet model per process and model folder, shared by every StreamingTranscriber
 /// (plugin instances in a DAW would otherwise load 700 MB each). Inference is serialised
@@ -220,22 +188,32 @@ struct StreamingTranscriber::Worker {
                                                   static_cast<std::int64_t>(m_audio.size()));
         const std::span<const float> samples(m_audio.data() + begin,
                                              static_cast<std::size_t>(end - begin));
+        if (m_config.m_segment_audio) { m_config.m_segment_audio(m_audio_start + begin, samples); }
         Transcript transcript;
         {
             const std::scoped_lock lock(m_model->m_mutex);
             transcript = m_model->m_transcriber.transcribe(samples);
         }
-        if (transcript.m_text.empty()) { return; }  // noise the VAD let through
-
         const auto start = m_audio_start + begin;
         const auto stop = m_audio_start + end;
-        Segment segment{
-            .m_id = ++m_next_id,
-            .m_start_sample = start,
-            .m_end_sample = stop,
-            .m_text = transcript.m_text,
-            .m_words = words_of(transcript, m_model->m_transcriber.vocabulary(), start, stop),
-            .m_is_final = true};
+        // The segment text is its words joined, so text and words never disagree (decode keeps a
+        // leading space after an opening bare marker; the words do not).
+        auto words = words_from_tokens(transcript.m_tokens,
+                                       m_model->m_transcriber.vocabulary(),
+                                       start,
+                                       stop);
+        std::string text;
+        for (const auto& word : words) {
+            if (!text.empty()) { text += ' '; }
+            text += word.m_text;
+        }
+        if (text.empty()) { return; }  // noise the VAD let through
+        Segment segment{.m_id = ++m_next_id,
+                        .m_start_sample = start,
+                        .m_end_sample = stop,
+                        .m_text = std::move(text),
+                        .m_words = std::move(words),
+                        .m_is_final = true};
         const std::scoped_lock lock(m_output_mutex);
         m_output.push_back(std::move(segment));
     }

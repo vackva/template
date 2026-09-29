@@ -5,10 +5,12 @@
 #include <cstdint>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "TestAudio.h"
@@ -16,6 +18,7 @@
 #include "tpl/stt/Segment.h"
 #include "tpl/stt/StreamingTranscriber.h"
 #include "tpl/stt/Transcriber.h"
+#include "tpl/stt/Words.h"
 
 namespace {
 
@@ -32,7 +35,8 @@ StreamingConfig config() {
             .m_vad_model = test::vad_model(),
             .m_num_threads = 1,
             .m_vad = {},
-            .m_ring_seconds = 120.0};
+            .m_ring_seconds = 120.0,
+            .m_segment_audio = {}};
 }
 
 std::vector<float> to_host_rate(const std::vector<float>& audio_16k) {
@@ -68,14 +72,60 @@ protected:
         s_transcriber = std::make_unique<StreamingTranscriber>(config());
         ASSERT_TRUE(s_transcriber->wait_until_loaded()) << s_transcriber->error();
         s_transcriber->prepare(k_host_rate, static_cast<int>(k_host_block));
+        s_offline = std::make_unique<tpl::stt::Transcriber>(
+            tpl::stt::TranscriberConfig{.m_model_dir = test::model_dir()});
     }
-    static void TearDownTestSuite() { s_transcriber.reset(); }
+    static void TearDownTestSuite() {
+        s_transcriber.reset();
+        s_offline.reset();
+    }
     void SetUp() override { s_transcriber->reset(); }
 
-    static std::unique_ptr<StreamingTranscriber>
-        s_transcriber;  // NOLINT(readability-identifier-naming)
+    // NOLINTNEXTLINE(readability-identifier-naming)
+    static std::unique_ptr<StreamingTranscriber> s_transcriber;
+    /// The offline path the streaming segments must reproduce exactly.
+    // NOLINTNEXTLINE(readability-identifier-naming)
+    static std::unique_ptr<tpl::stt::Transcriber> s_offline;
 };
 std::unique_ptr<StreamingTranscriber> StreamingTranscriberTest::s_transcriber;
+std::unique_ptr<tpl::stt::Transcriber> StreamingTranscriberTest::s_offline;
+
+/// The three test clips at 16 kHz, 1 s of silence before and 1.5 s after each.
+std::vector<float> clip_stream_16k() {
+    std::ifstream clips_file(test::data_dir() / "clips.json");
+    std::vector<float> signal(16000, 0.0f);
+    for (const auto& clip : nlohmann::json::parse(clips_file)) {
+        const auto audio =
+            test::read_wav_16k_mono(test::data_dir() / clip["file"].get<std::string>());
+        signal.insert(signal.end(), audio.begin(), audio.end());
+        signal.insert(signal.end(), 24000, 0.0f);
+    }
+    return signal;
+}
+
+/// Checks each streaming segment against the offline Transcriber run on exactly the samples
+/// [start, end) of `signal_16k` (what the worker saw): same text, same words, same times.
+void expect_matches_offline(const std::vector<Segment>& segments,
+                            const std::vector<float>& signal_16k,
+                            tpl::stt::Transcriber& offline) {
+    for (const auto& segment : segments) {
+        ASSERT_GE(segment.m_start_sample, 0);
+        ASSERT_LE(segment.m_end_sample, static_cast<std::int64_t>(signal_16k.size()));
+        const auto span =
+            std::span(signal_16k)
+                .subspan(static_cast<std::size_t>(segment.m_start_sample),
+                         static_cast<std::size_t>(segment.m_end_sample - segment.m_start_sample));
+        const auto transcript = offline.transcribe(span);
+        const auto words = tpl::stt::words_from_tokens(transcript.m_tokens,
+                                                       offline.vocabulary(),
+                                                       segment.m_start_sample,
+                                                       segment.m_end_sample);
+        std::string text;
+        for (const auto& word : words) { text += (text.empty() ? "" : " ") + word.m_text; }
+        EXPECT_EQ(segment.m_text, text);
+        EXPECT_EQ(segment.m_words, words) << segment.m_text;
+    }
+}
 
 // English and German clips, 48 kHz, separated by pauses: one segment per clip, at the
 // right place, with words, and the reference text within the offline WER bounds.
@@ -171,6 +221,91 @@ TEST_F(StreamingTranscriberTest, InstancesShareTheModel) {
     ASSERT_EQ(a.size(), 1u);
     ASSERT_EQ(b.size(), 1u);
     EXPECT_EQ(a[0].m_text, b[0].m_text);
+}
+
+/// The samples the worker handed to the model, per segment start (set up by tap_audio()).
+struct AudioTap {
+    std::mutex m_mutex;
+    std::vector<std::pair<std::int64_t, std::vector<float>>> m_segments;
+};
+
+StreamingConfig tapped_config(AudioTap& tap) {
+    auto cfg = config();
+    cfg.m_segment_audio = [&tap](std::int64_t start, std::span<const float> samples) {
+        const std::scoped_lock lock(tap.m_mutex);
+        tap.m_segments.emplace_back(start, std::vector<float>(samples.begin(), samples.end()));
+    };
+    return cfg;
+}
+
+/// Bit for bit: the model got exactly signal_16k[start, start + n) for every segment.
+void expect_bit_exact_audio(AudioTap& tap,
+                            const std::vector<float>& signal_16k,
+                            std::size_t segments) {
+    const std::scoped_lock lock(tap.m_mutex);
+    ASSERT_EQ(tap.m_segments.size(), segments);
+    for (const auto& [start, samples] : tap.m_segments) {
+        ASSERT_GE(start, 0);
+        ASSERT_LE(static_cast<std::size_t>(start) + samples.size(), signal_16k.size());
+        const auto expected =
+            std::span(signal_16k).subspan(static_cast<std::size_t>(start), samples.size());
+        ASSERT_TRUE(std::equal(samples.begin(), samples.end(), expected.begin()))
+            << "segment at " << start;
+    }
+}
+
+// The real-time path at the model's own rate (no resampling): host blocks of seeded random
+// size (1 - 1023 samples) stress the ring, the VAD's 512-sample chunking and the trimming of
+// kept audio. Every segment must be byte for byte what the offline path makes of its samples.
+TEST_F(StreamingTranscriberTest, RealTimePathMatchesOfflineExactlyAt16k) {
+    AudioTap tap;
+    StreamingTranscriber stream(tapped_config(tap));
+    ASSERT_TRUE(stream.wait_until_loaded()) << stream.error();
+    stream.prepare(16000.0, 1024);
+    const auto signal = clip_stream_16k();
+    std::uint32_t state = 12345;
+    for (std::size_t start = 0; start < signal.size();) {
+        state = state * 1664525u + 1013904223u;
+        const auto count = std::min<std::size_t>(1 + (state >> 8u) % 1023, signal.size() - start);
+        stream.push_audio(std::span(signal).subspan(start, count));
+        start += count;
+    }
+    stream.reset();
+    const auto segments = pop_all(stream);
+    ASSERT_EQ(segments.size(), 3u);
+    EXPECT_EQ(stream.dropped_samples(), 0u);
+    expect_bit_exact_audio(tap, signal, segments.size());
+    expect_matches_offline(segments, signal, *s_offline);
+}
+
+// The whole real-time path at a 48 kHz host rate, resampling included: the test reproduces
+// the 16 kHz signal the worker sees with a Resampler fed the same blocks (bit-identical), so
+// again every segment must match the offline path exactly.
+TEST_F(StreamingTranscriberTest, RealTimePathMatchesOfflineExactlyAt48k) {
+    AudioTap tap;
+    StreamingTranscriber stream(tapped_config(tap));
+    ASSERT_TRUE(stream.wait_until_loaded()) << stream.error();
+    stream.prepare(k_host_rate, static_cast<int>(k_host_block));
+    const auto host = to_host_rate(clip_stream_16k());
+
+    tpl::stt::Resampler resampler;
+    resampler.prepare(k_host_rate, 16000.0, k_host_block);
+    std::vector<float> seen_16k;
+    std::vector<float> block(resampler.max_output(k_host_block));
+    for (std::size_t start = 0; start < host.size(); start += k_host_block) {
+        const auto in = std::span(host).subspan(start, std::min(k_host_block, host.size() - start));
+        stream.push_audio(in);
+        const auto written = resampler.process(in, block);
+        seen_16k.insert(seen_16k.end(),
+                        block.begin(),
+                        block.begin() + static_cast<std::ptrdiff_t>(written));
+    }
+    stream.reset();
+    const auto segments = pop_all(stream);
+    ASSERT_EQ(segments.size(), 3u);
+    EXPECT_EQ(stream.dropped_samples(), 0u);
+    expect_bit_exact_audio(tap, seen_16k, segments.size());
+    expect_matches_offline(segments, seen_16k, *s_offline);
 }
 
 TEST(StreamingTranscriber, MissingModelFailsToLoad) {

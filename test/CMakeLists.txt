@@ -33,6 +33,7 @@ if(TPL_WITH_STT)
             stt/test_Transcriber.cpp
             stt/test_VadSegmenter.cpp
             stt/test_Vocabulary.cpp
+            stt/test_Words.cpp
         LIBS tpl::stt tpl_dr_wav nlohmann_json::nlohmann_json)
     target_compile_definitions(test_stt PRIVATE
         TPL_STT_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/stt"

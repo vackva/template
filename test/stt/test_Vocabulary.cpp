@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -82,6 +85,32 @@ TEST(Vocabulary, LoadsTheExportedParakeetVocabulary) {
     EXPECT_EQ(vocabulary.blank_id(), 8192);
     EXPECT_EQ(vocabulary.token(0), "<unk>");
     EXPECT_EQ(vocabulary.token(8192), "<blk>");
+}
+
+// onnx-asr's detokeniser (the reference) on sequences covering every token of the Parakeet
+// vocabulary, random mixes of the hard ones (bare marker, marker + punctuation, punctuation,
+// special tokens, Cyrillic, Greek) and the real transcripts: byte for byte the same text.
+TEST(Vocabulary, DecodeMatchesOnnxAsrForTheWholeVocabulary) {
+    const auto vocabulary = Vocabulary::load(tpl::stt::test::model_dir() / "vocab.txt");
+    std::ifstream file(tpl::stt::test::data_dir() / "detokenize_golden.json");
+    const auto cases = nlohmann::json::parse(file);
+    ASSERT_GT(cases.size(), 2000u);
+
+    std::vector<bool> covered(vocabulary.size(), false);
+    int mismatches = 0;
+    for (const auto& reference : cases) {
+        const auto ids = reference["ids"].get<std::vector<std::int32_t>>();
+        for (const auto id : ids) { covered[static_cast<std::size_t>(id)] = true; }
+        const auto expected = reference["text"].get<std::string>();
+        const auto actual = vocabulary.decode(ids);
+        if (actual != expected && ++mismatches <= 5) {
+            ADD_FAILURE() << ::testing::PrintToString(ids) << "\n  expected: " << expected
+                          << "\n  actual:   " << actual;
+        }
+    }
+    EXPECT_EQ(mismatches, 0);
+    // Every token but the blank (which never reaches the text) is in some case.
+    for (std::size_t id = 0; id + 1 < vocabulary.size(); ++id) { ASSERT_TRUE(covered[id]) << id; }
 }
 
 TEST(Vocabulary, LoadAcceptsCrLf) {

@@ -41,16 +41,24 @@ char32_t code_point_at(std::string_view text, std::size_t pos) {
     return byte;
 }
 
-/// Approximates Python's Unicode `\w` for the scripts Parakeet emits: ASCII letters, digits
-/// and '_' plus any non-ASCII code point outside the Latin-1 and general punctuation blocks.
+/// Python's `\w` (what onnx-asr's detokeniser tests) for every character a Parakeet token can
+/// contain: letters, digits and '_' are word characters, punctuation and symbols are not.
+/// C++ has no Unicode categories, so the non-ASCII rule lists the symbol ranges instead:
+/// Latin-1 punctuation and signs (but not the letter-like ª ² ³ µ ¹ º ¼ ½ ¾), × and ÷,
+/// General Punctuation and Currency Symbols. Checked against onnx-asr for every token of
+/// the vocabulary (test/data/stt/detokenize_golden.json).
 bool is_word_char(char32_t c) {
     if (c < 0x80u) {
         return (c >= U'a' && c <= U'z') || (c >= U'A' && c <= U'Z') || (c >= U'0' && c <= U'9') ||
                c == U'_';
     }
-    const bool latin1_punctuation = c <= 0xBFu || c == 0xD7u || c == 0xF7u;
-    const bool general_punctuation = c >= 0x2000u && c <= 0x206Fu;
-    return !latin1_punctuation && !general_punctuation;
+    if (c >= 0xA0u && c <= 0xBFu) {
+        return c == 0xAAu || c == 0xB2u || c == 0xB3u || c == 0xB5u || c == 0xB9u || c == 0xBAu ||
+               (c >= 0xBCu && c <= 0xBEu);
+    }
+    if (c < 0xA0u || c == 0xD7u || c == 0xF7u) { return false; }  // C1 controls, × ÷
+    if (c >= 0x2000u && c <= 0x206Fu) { return false; }           // General Punctuation
+    return !(c >= 0x20A0u && c <= 0x20CFu);                       // Currency Symbols
 }
 
 std::string replace_word_markers(std::string_view token) {
