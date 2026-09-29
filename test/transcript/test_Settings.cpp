@@ -53,10 +53,10 @@ TEST(Settings, MissingFileGivesDefaults) {
 TEST(Settings, RoundTrip) {
     const auto file = tpl::transcript::test::fresh_dir() / "sub" / "settings.json";
     const Settings settings{.m_storage_dir = "/data/transcripts",
-                      .m_retention_days = 30,
-                      .m_max_session_hours = 8,
-                      .m_language = "de",
-                      .m_model_dir = "/models/parakeet"};
+                            .m_retention_days = 30,
+                            .m_max_session_hours = 8,
+                            .m_language = "de",
+                            .m_model_dir = "/models/parakeet"};
     tpl::transcript::save_settings(file, settings);
     EXPECT_EQ(tpl::transcript::load_settings(file), settings);
     EXPECT_FALSE(std::filesystem::exists(file.string() + ".tmp"));
