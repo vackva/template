@@ -1,6 +1,5 @@
 #include "tpl/transcript/Settings.h"
 
-#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -8,6 +7,7 @@
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
 #if defined(THL_PLATFORM_WINDOWS)
+#include <cstddef>
 #include <memory>
 #endif
 #include <stdexcept>

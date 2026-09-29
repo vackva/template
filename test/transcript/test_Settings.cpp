@@ -52,7 +52,7 @@ TEST(Settings, MissingFileGivesDefaults) {
 
 TEST(Settings, RoundTrip) {
     const auto file = tpl::transcript::test::fresh_dir() / "sub" / "settings.json";
-    Settings settings{.m_storage_dir = "/data/transcripts",
+    const Settings settings{.m_storage_dir = "/data/transcripts",
                       .m_retention_days = 30,
                       .m_max_session_hours = 8,
                       .m_language = "de",
