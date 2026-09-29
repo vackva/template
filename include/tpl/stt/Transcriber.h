@@ -9,6 +9,7 @@
 
 #include "tpl/Exports.h"
 #include "tpl/stt/TdtGreedyDecoder.h"
+#include "tpl/stt/Vocabulary.h"
 
 namespace tpl::stt {
 
@@ -49,6 +50,9 @@ public:
 
     /// `samples`: 16 kHz mono, nominally in [-1, 1]. Empty input gives an empty transcript.
     [[nodiscard]] Transcript transcribe(std::span<const float> samples);
+
+    /// The model's tokens, e.g. to group m_tokens into words.
+    [[nodiscard]] const Vocabulary& vocabulary() const noexcept;
 
 private:
     struct Impl;

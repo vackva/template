@@ -11,6 +11,7 @@ namespace tpl::stt::test {
 /// Paths baked in by test/CMakeLists.txt.
 std::filesystem::path data_dir();
 std::filesystem::path model_dir();
+std::filesystem::path vad_model();
 std::filesystem::path binary_dir();
 
 /// Reads a 16 kHz mono WAV file; fails the calling test (ADD_FAILURE) on another format.

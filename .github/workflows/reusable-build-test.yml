@@ -5,12 +5,15 @@ name: build-test
 # config); the logic lives here once, in the repo it runs for.
 #
 # Matrix rows: { name, os, preset, args?, pr?, vcvars?, assert_grep?, dualarch?,
-#                build_only? }
+#                build_only?, apt? }
 #   pr: true      -> included in the pull_request tier (other events run all rows)
 #   vcvars        -> arch for ilammy/msvc-dev-cmd (Ninja needs cl.exe from vcvars)
 #   assert_grep   -> literal (grep -F) asserted in configure.log after the
 #                    build (e.g. a backend auto-disable warning); fails if absent
-#   build_only    -> cross-compiled leg: build, skip the test and assert steps
+#   build_only    -> build, skip the test and assert steps (cross-compiled legs,
+#                    the JUCE app legs)
+#   apt           -> extra Ubuntu packages installed before the build (JUCE's
+#                    ALSA / X11 / freetype headers for the app legs)
 #   multiarch     -> enable sccache's multi-arch caching on this leg (macOS
 #                    universal; adopt per leg on evidence — see cmake-build)
 #   dualarch      -> binaryDir leaf; after the native ctest run, every test_*
@@ -108,6 +111,12 @@ jobs:
           SAVE: "false"
       - name: setup build tools
         uses: ./.github/actions/setup-cpp-build-tools
+      - name: extra packages
+        if: matrix.apt && runner.os == 'Linux'
+        shell: bash
+        env:
+          PACKAGES: ${{ matrix.apt }}
+        run: sudo apt-get update && sudo apt-get install -y $PACKAGES
       # Ninja needs cl.exe and its headers/libs from a vcvars environment.
       - name: MSVC environment
         if: matrix.vcvars

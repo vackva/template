@@ -22,7 +22,8 @@
       "inherits": "base",
       "binaryDir": "${sourceDir}/build/desktop/Debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TPL_WITH_APP": "ON"
       }
     },
     {
@@ -30,7 +31,8 @@
       "inherits": "base",
       "binaryDir": "${sourceDir}/build/desktop/Release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "TPL_WITH_APP": "ON"
       }
     },
     {
@@ -122,6 +124,32 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "TPL_SANITIZERS": "rtsan"
       }
+    },
+    {
+      "name": "ci-app",
+      "displayName": "Transcriber plugin + standalone (JUCE), release, no tests",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/app",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_SHARED_LIBS": "OFF",
+        "TPL_WITH_APP": "ON",
+        "TPL_WITH_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "windows-msvc-app",
+      "displayName": "Transcriber plugin + standalone (JUCE), MSVC",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/build/ci/msvc-app",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_SHARED_LIBS": "OFF",
+        "TPL_WITH_APP": "ON",
+        "TPL_WITH_TESTS": "OFF",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
     }
   ],
   "buildPresets": [
@@ -168,6 +196,14 @@
     {
       "name": "desktop-tests-rtsan",
       "configurePreset": "desktop-tests-rtsan"
+    },
+    {
+      "name": "ci-app",
+      "configurePreset": "ci-app"
+    },
+    {
+      "name": "windows-msvc-app",
+      "configurePreset": "windows-msvc-app"
     }
   ],
   "testPresets": [
@@ -236,6 +272,16 @@
       "name": "desktop-tests-rtsan",
       "inherits": "test-base",
       "configurePreset": "desktop-tests-rtsan"
+    },
+    {
+      "name": "ci-app",
+      "configurePreset": "ci-app",
+      "inherits": "test-base"
+    },
+    {
+      "name": "windows-msvc-app",
+      "configurePreset": "windows-msvc-app",
+      "inherits": "test-base"
     }
   ]
 }

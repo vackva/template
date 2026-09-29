@@ -37,6 +37,10 @@ Transcriber::~Transcriber() = default;
 Transcriber::Transcriber(Transcriber&&) noexcept = default;
 Transcriber& Transcriber::operator=(Transcriber&&) noexcept = default;
 
+const Vocabulary& Transcriber::vocabulary() const noexcept {
+    return m_impl->m_vocabulary;
+}
+
 Transcript Transcriber::transcribe(std::span<const float> samples) {
     // Digital silence: the per-feature normalisation of a constant signal yields all-zero
     // features, on which the model hallucinates ("Ha ha ha."). NeMo transcribes it as "".

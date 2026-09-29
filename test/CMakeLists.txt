@@ -26,14 +26,35 @@ if(TPL_WITH_STT)
     tpl_add_test(stt
         SOURCES
             stt/TestAudio.cpp
-            stt/test_Vocabulary.cpp
+            stt/test_Resampler.cpp
+            stt/test_SpscRing.cpp
+            stt/test_StreamingTranscriber.cpp
             stt/test_TdtGreedyDecoder.cpp
             stt/test_Transcriber.cpp
+            stt/test_VadSegmenter.cpp
+            stt/test_Vocabulary.cpp
         LIBS tpl::stt tpl_dr_wav nlohmann_json::nlohmann_json)
     target_compile_definitions(test_stt PRIVATE
         TPL_STT_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/stt"
         TPL_STT_TEST_MODEL_DIR="${TPL_STT_MODEL_DIR}"
+        TPL_STT_TEST_VAD_MODEL="${TPL_STT_VAD_DIR}/silero_vad.onnx"
         TPL_STT_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
+endif()
+
+if(TPL_WITH_STT)
+    tpl_add_test(transcript
+        SOURCES
+            transcript/test_Export.cpp
+            transcript/test_ParagraphLayout.cpp
+            transcript/test_ReplaySegmentSource.cpp
+            transcript/test_RowIndex.cpp
+            transcript/test_SegmentCache.cpp
+            transcript/test_Settings.cpp
+            transcript/test_TranscriptStore.cpp
+            transcript/test_TranscriptionService.cpp
+        LIBS tpl::transcript)
+    target_compile_definitions(test_transcript PRIVATE
+        TPL_TRANSCRIPT_TEST_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 # A shared tpl_dsp must export exactly tpl:: — nothing of libstdc++, nothing else.
@@ -43,5 +64,6 @@ if(BUILD_SHARED_LIBS)
     tanh_add_export_check(NAME tpl_dsp_exports LIBRARY tpl_dsp NAMESPACES tpl)
     if(TPL_WITH_STT)
         tanh_add_export_check(NAME tpl_stt_exports LIBRARY tpl_stt NAMESPACES tpl)
+        tanh_add_export_check(NAME tpl_transcript_exports LIBRARY tpl_transcript NAMESPACES tpl)
     endif()
 endif()

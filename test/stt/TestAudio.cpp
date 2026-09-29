@@ -19,6 +19,9 @@ std::filesystem::path data_dir() {
 std::filesystem::path model_dir() {
     return TPL_STT_TEST_MODEL_DIR;
 }
+std::filesystem::path vad_model() {
+    return TPL_STT_TEST_VAD_MODEL;
+}
 std::filesystem::path binary_dir() {
     return TPL_STT_TEST_BINARY_DIR;
 }

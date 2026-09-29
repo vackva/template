@@ -21,13 +21,25 @@ endif()
 set(TPL_STT_MODEL_INSTALL_DIR "${_stt_model_root}/${TPL_STT_MODEL_NAME}" CACHE PATH
     "Absolute system-wide model directory (default_model_dir())")
 
+# Silero VAD (MIT) for the streaming backend's segmentation, installed next to Parakeet.
+set(TPL_STT_VAD_NAME "silero-vad-v6.2.3")
+set(TPL_STT_VAD_DIR "${PROJECT_SOURCE_DIR}/models/${TPL_STT_VAD_NAME}" CACHE PATH
+    "Silero VAD model directory the tests use and the stt_model install component copies")
+set(TPL_STT_VAD_INSTALL_DIR "${_stt_model_root}/${TPL_STT_VAD_NAME}" CACHE PATH
+    "Absolute system-wide Silero VAD directory (default_vad_model())")
+
 # ------------------------------------------------------------------------------
 # The library
 # ------------------------------------------------------------------------------
 add_library(tpl_stt
     src/stt/OnnxParakeet.cpp
+    src/stt/Resampler.cpp
+    src/stt/Segment.cpp
+    src/stt/SileroVad.cpp
+    src/stt/StreamingTranscriber.cpp
     src/stt/TdtGreedyDecoder.cpp
     src/stt/Transcriber.cpp
+    src/stt/VadSegmenter.cpp
     src/stt/Vocabulary.cpp)
 add_library(tpl::stt ALIAS tpl_stt)
 target_include_directories(tpl_stt PUBLIC
@@ -35,7 +47,9 @@ target_include_directories(tpl_stt PUBLIC
     $<INSTALL_INTERFACE:include>)
 target_compile_definitions(tpl_stt
     PUBLIC ${TANH_PLATFORM_COMPILE_DEFINITIONS}
-    PRIVATE TPL_STT_MODEL_INSTALL_DIR="${TPL_STT_MODEL_INSTALL_DIR}")
+    PRIVATE
+        TPL_STT_MODEL_INSTALL_DIR="${TPL_STT_MODEL_INSTALL_DIR}"
+        TPL_STT_VAD_INSTALL_PATH="${TPL_STT_VAD_INSTALL_DIR}/silero_vad.onnx")
 # C4251: std:: members of exported classes; library and consumers share one toolchain.
 target_compile_options(tpl_stt PRIVATE
     $<IF:$<CXX_COMPILER_ID:MSVC>,/W4 /WX /wd4251,-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror>)
@@ -56,6 +70,11 @@ install(DIRECTORY "${TPL_STT_MODEL_DIR}/"
     COMPONENT stt_model
     EXCLUDE_FROM_ALL
     FILES_MATCHING PATTERN "*.onnx" PATTERN "*.txt" PATTERN "*.json")
+install(DIRECTORY "${TPL_STT_VAD_DIR}/"
+    DESTINATION "${TPL_STT_VAD_INSTALL_DIR}"
+    COMPONENT stt_model
+    EXCLUDE_FROM_ALL
+    FILES_MATCHING PATTERN "*.onnx" PATTERN "LICENSE" PATTERN "*.md")
 
 # ------------------------------------------------------------------------------
 # dr_wav (MIT-0) — WAV reading for the example and the tests, never for the library
