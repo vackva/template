@@ -33,18 +33,24 @@ std::int64_t now_utc_ms() {
 /// released in step with the audio that passes through (8 s per segment, 1.5 s latency).
 /// Where the models are: the folder from Settings, else the system-wide install, else (dev
 /// builds) the repository's models/ folder. Empty if none holds both models.
+tpl::stt::StreamingConfig models_at(const std::filesystem::path& model_dir,
+                                    const std::filesystem::path& vad_model) {
+    tpl::stt::StreamingConfig config;
+    config.m_model_dir = model_dir;
+    config.m_vad_model = vad_model;
+    return config;
+}
+
 std::optional<tpl::stt::StreamingConfig> find_models(const std::filesystem::path& configured) {
     std::vector<tpl::stt::StreamingConfig> candidates;
     if (!configured.empty()) {
+        // A configured Parakeet folder expects Silero VAD in its sibling folder.
+        const auto vad_folder = tpl::stt::default_vad_model().parent_path().filename();
         candidates.push_back(
-            {.m_model_dir = configured,
-             .m_vad_model = configured.parent_path() /
-                            tpl::stt::default_vad_model().parent_path().filename() /
-                            "silero_vad.onnx"});
+            models_at(configured, configured.parent_path() / vad_folder / "silero_vad.onnx"));
     }
-    candidates.push_back({});
-    candidates.push_back({.m_model_dir = TPL_TRANSCRIBER_DEV_MODEL_DIR,
-                          .m_vad_model = TPL_TRANSCRIBER_DEV_VAD_MODEL});
+    candidates.emplace_back();  // the system-wide install
+    candidates.push_back(models_at(TPL_TRANSCRIBER_DEV_MODEL_DIR, TPL_TRANSCRIBER_DEV_VAD_MODEL));
     for (auto& candidate : candidates) {
         if (std::filesystem::exists(candidate.m_model_dir / "vocab.txt") &&
             std::filesystem::exists(candidate.m_vad_model)) {
@@ -62,15 +68,24 @@ std::unique_ptr<tpl::stt::SegmentSource> make_demo_source() {
 
 }  // namespace
 
+juce::AudioProcessor::BusesProperties TranscriberProcessor::buses() {
+    // The standalone app only listens: without an output bus JUCE sees no feedback loop
+    // (so it does not mute the microphone) and nothing is played back. The plugin passes
+    // its audio through.
+    if (juce::JUCEApplicationBase::isStandaloneApp()) {
+        return BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true);
+    }
+    return BusesProperties()
+        .withInput("Input", juce::AudioChannelSet::stereo(), true)
+        .withOutput("Output", juce::AudioChannelSet::stereo(), true);
+}
+
 juce::File TranscriberProcessor::settings_file() {
     return juce::File(
         juce::String((tpl::transcript::default_data_dir() / "settings.json").u8string().c_str()));
 }
 
-TranscriberProcessor::TranscriberProcessor()
-    : AudioProcessor(BusesProperties()
-                         .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)) {
+TranscriberProcessor::TranscriberProcessor() : AudioProcessor(buses()) {
     try {
         m_settings = tpl::transcript::load_settings(
             std::filesystem::path(settings_file().getFullPathName().toStdString()));
@@ -190,11 +205,13 @@ void TranscriberProcessor::prepareToPlay(double sample_rate, int max_block_size)
 }
 
 bool TranscriberProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
+    const auto in = layouts.getMainInputChannelSet();
     const auto out = layouts.getMainOutputChannelSet();
-    if (out != juce::AudioChannelSet::mono() && out != juce::AudioChannelSet::stereo()) {
+    if (in != juce::AudioChannelSet::mono() && in != juce::AudioChannelSet::stereo()) {
         return false;
     }
-    return layouts.getMainInputChannelSet() == out;
+    // Input only (standalone), or pass-through with matching channels (plugin).
+    return out.isDisabled() || out == in;
 }
 
 void TranscriberProcessor::processBlock(juce::AudioBuffer<float>& buffer,
@@ -206,8 +223,6 @@ void TranscriberProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const auto* service = m_audio_service.load(std::memory_order_seq_cst);
     if (service != nullptr && service->is_recording() && !m_mono.empty()) { push_mono(buffer); }
     m_audio_busy.fetch_sub(1, std::memory_order_seq_cst);
-    // Standalone: microphone in, nothing out (no feedback through the speakers).
-    if (wrapperType == wrapperType_Standalone) { buffer.clear(); }
 }
 
 void TranscriberProcessor::push_mono(const juce::AudioBuffer<float>& buffer) noexcept {

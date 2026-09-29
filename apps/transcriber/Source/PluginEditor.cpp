@@ -6,14 +6,6 @@
 
 #include "tpl/transcript/Export.h"
 
-#if JucePlugin_Build_Standalone
-#include <juce_audio_utils/juce_audio_utils.h>
-
-// After juce_audio_utils (AudioDeviceManager, AudioProcessorPlayer); its own block so
-// clang-format's include sorting keeps the order.
-#include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
-#endif
-
 namespace {
 
 constexpr int k_poll_hz = 20;
@@ -98,16 +90,6 @@ TranscriberEditor::TranscriberEditor(TranscriberProcessor& owner)
     };
     m_settings.on_close = [this] { m_settings.setVisible(false); };
     addChildComponent(m_settings);
-
-#if JucePlugin_Build_Standalone
-    // The standalone app listens to the microphone and plays nothing back (processBlock
-    // silences its output there), so JUCE's feedback-loop input mute is not needed.
-    if (m_processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone) {
-        if (auto* holder = juce::StandalonePluginHolder::getInstance()) {
-            holder->getMuteInputValue().setValue(false);
-        }
-    }
-#endif
 
     attach_store();
     if (!m_processor.startup_error().empty()) { show_error(utf8(m_processor.startup_error())); }

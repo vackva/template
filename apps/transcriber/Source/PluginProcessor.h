@@ -80,6 +80,7 @@ public:
     std::optional<tpl::transcript::SessionId> m_viewed_session;
 
     [[nodiscard]] static juce::File settings_file();
+    [[nodiscard]] static BusesProperties buses();
 
 private:
     void segment_stored(tpl::transcript::SessionId session, std::int64_t seq) override;

@@ -38,7 +38,7 @@ struct ServiceConfig {
 /// once; the worker carries them out in order.
 class TPL_API TranscriptionService {
 public:
-    class Listener {
+    class TPL_API Listener {
     public:
         Listener() = default;
         Listener(const Listener&) = delete;

@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "SileroVad.h"
+#include "tpl/Exports.h"
 #include "tpl/stt/Segment.h"
 #include "tpl/stt/Transcriber.h"
 #include "tpl/stt/VadSegmenter.h"

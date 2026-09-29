@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <span>
 #include <stdexcept>
-#include <string>
 
 namespace tpl::stt {
 
