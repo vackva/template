@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Example C++20 library (`tpl_dsp`, namespace `tpl::dsp`: a smoothed gain and a one-pole
-low-pass) whose real purpose is the setup around it: how Claude Code works in a tanh-lab
+low-pass; `tpl_stt`, namespace `tpl::stt`: offline speech-to-text with Parakeet over anira's
+ONNX Runtime, see `docs/stt.md`) whose real purpose is the setup around it: how Claude Code works in a tanh-lab
 C++ repo — CLAUDE.md files, hooks, a plugin, CMake presets, GoogleTest, sanitizers, CI and
 Codecov. Everything is in this repo; nothing is fetched from tanh-tooling or ci-actions.
 
@@ -16,6 +17,7 @@ just tidy                  # clang-tidy over src test (needs a configured deskto
 just sanitize asan         # asan (+ubsan) | tsan | rtsan presets
 just coverage              # instrumented build + llvm-cov report
 just tooling-check         # installed tooling copies match tooling/
+just model                 # git lfs pull the speech-to-text model
 ```
 
 Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePoleLowpass.*'`
@@ -25,7 +27,13 @@ Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePole
 | Path | What |
 |---|---|
 | `include/tpl/`, `src/` | the library; `include/tpl/Exports.h` holds `TPL_API` and `TPL_NONBLOCKING` |
-| `test/` | GoogleTest suites, `test_<component>` executables |
+| `test/` | GoogleTest suites, `test_<component>` executables; `test/data/stt/` clips + golden transcripts |
+| `models/` | exported Parakeet model and Silero VAD; `*.onnx` in Git LFS, `manifest.json` keys the CI cache |
+| `scripts/export-parakeet/` | uv script: NeMo -> int8 ONNX export, golden transcripts |
+| `third_party/anira` | anira v2.3.0 submodule (ONNX Runtime) — added before `cmake/tanh`, see `cmake/anira.cmake` |
+| `examples/` | `tpl-transcribe` |
+| `include/tpl/transcript/`, `src/transcript/` | `tpl_transcript`: SQLite store, recording service, export, UI layout logic (no JUCE) |
+| `apps/transcriber/` | JUCE 9 plugin + standalone (`TPL_WITH_APP`, on in the desktop presets); see `docs/transcriber-app.md` |
 | `tooling/` | in-repo tanh-tooling: clang configs, CMake modules, git hook, Claude plugin |
 | `.clang-*`, `cmake/tanh/`, `hooks/tanh/` | **installed copies** of `tooling/` — never edit (a hook blocks it) |
 | `.github/` | CI: caller workflows, vendored ci-actions (`actions/`, `reusable-*.yml`), matrices, ruleset |
@@ -41,6 +49,13 @@ Single test binary: `./build/desktop/Debug/test/test_dsp --gtest_filter='OnePole
   variables, `m_` members, `k_` constants, `PascalCase` enum values. Files: `PascalCase.h/.cpp`.
 - **Real-time safety**: `process()` is `noexcept TPL_NONBLOCKING` and must not allocate, lock,
   log, throw or make syscalls. RealtimeSanitizer enforces it in the `rtsan` preset.
+- **`tpl_stt` is not real-time safe**: loading and `transcribe()` allocate and take up to seconds;
+  never call them from an audio callback. Its tests need the Git LFS model (`just model`).
+  The one real-time entry point is `SegmentSource::push_audio()` (resample + lock-free ring).
+- **JUCE strings**: non-ASCII literals go through `theme::text()` (`juce::String::fromUTF8`);
+  `juce::String(const char*)` asserts on anything but ASCII.
+- **Sanitizers on macOS**: use Homebrew LLVM (see `docs/stt.md`); Apple clang 17's ASan/TSan
+  runtimes hang at start-up on macOS 26.6.
 - **Symbol policy**: the library builds with hidden visibility. Every public class or free
   function needs `TPL_API`, or shared builds fail to link. The `tpl_dsp_exports` CTest fails
   if the shared library exports anything outside `tpl::`.

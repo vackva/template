@@ -13,7 +13,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)  # clangd, clang-tidy, the Claude lint hoo
 
 option(TPL_WITH_TESTS "Build the GoogleTest suites" ${PROJECT_IS_TOP_LEVEL})
 option(TPL_WITH_INSTALL "Generate install rules and the tpl CMake package" ${PROJECT_IS_TOP_LEVEL})
+option(TPL_WITH_STT "Build tpl_stt (speech-to-text; pulls anira and ONNX Runtime)" ON)
+option(TPL_WITH_EXAMPLES "Build the example programs in examples/" ${PROJECT_IS_TOP_LEVEL})
+option(TPL_WITH_APP "Build the Transcriber plugin and standalone app (apps/transcriber, fetches JUCE)" OFF)
 set(TPL_SANITIZERS "" CACHE STRING "Sanitizers for tpl_dsp and its tests, e.g. \"asan;ubsan\" (rtsan, asan, ubsan, tsan, msan, lsan)")
+
+# Before the tanh modules below, see cmake/anira.cmake.
+if(TPL_WITH_STT)
+    include(cmake/anira.cmake)
+endif()
 
 include(cmake/tanh/platform.cmake)
 include(cmake/tanh/apple.cmake)
@@ -48,6 +56,27 @@ foreach(_san IN LISTS TPL_SANITIZERS)
     string(TOUPPER "${_san}" _san_upper)
     tanh_add_sanitizer(tpl_dsp ${_san} DEFINE TPL_WITH_${_san_upper})
 endforeach()
+
+# ------------------------------------------------------------------------------
+# tpl_stt — offline speech-to-text (Parakeet TDT over ONNX Runtime)
+# ------------------------------------------------------------------------------
+if(TPL_WITH_STT)
+    include(cmake/stt.cmake)
+endif()
+
+# ------------------------------------------------------------------------------
+# tpl_transcript — transcript storage, recording service, export (needs tpl_stt)
+# ------------------------------------------------------------------------------
+if(TPL_WITH_STT)
+    include(cmake/transcript.cmake)
+endif()
+
+if(TPL_WITH_APP)
+    if(NOT TPL_WITH_STT)
+        message(FATAL_ERROR "TPL_WITH_APP needs TPL_WITH_STT")
+    endif()
+    add_subdirectory(apps/transcriber)
+endif()
 
 if(TPL_WITH_INSTALL)
     include(cmake/install.cmake)

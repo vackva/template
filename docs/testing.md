@@ -10,13 +10,16 @@ include(${PROJECT_SOURCE_DIR}/cmake/tanh/test-deps.cmake)
 tanh_fetch_googletest()                      # FetchContent, pinned version, warnings off
 
 tpl_add_test(dsp                             # -> executable test_dsp in <build>/test/
-    dsp/test_SmoothedValue.cpp
-    dsp/test_Gain.cpp
-    dsp/test_OnePoleLowpass.cpp)
+    SOURCES
+        dsp/test_SmoothedValue.cpp
+        dsp/test_Gain.cpp
+        dsp/test_OnePoleLowpass.cpp
+    LIBS tpl::dsp)
 ```
 
-`tpl_add_test` links `tpl::dsp` and `GTest::gtest_main` and calls `gtest_discover_tests`, so
-every `TEST()` is its own CTest entry:
+`tpl_add_test` links `LIBS` and `GTest::gtest_main` and calls `gtest_discover_tests`, so
+every `TEST()` is its own CTest entry. `test_stt` (speech-to-text) needs the model from Git
+LFS, see [stt.md](stt.md#tests).
 
 ```sh
 ctest --preset desktop-debug                 # everything

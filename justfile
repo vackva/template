@@ -55,6 +55,14 @@ tidy: build
     find src test -name '*.cpp' | xargs -P "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" -n 1 \
         clang-tidy -p build/desktop/Debug --warnings-as-errors='*'
 
+# Fetch the speech-to-text model from Git LFS (after a GIT_LFS_SKIP_SMUDGE=1 clone)
+model:
+    git lfs pull --include "models/**/*.onnx"
+
+# Install the model to the system-wide location default_model_dir() reads (needs sudo)
+install-model: build
+    sudo cmake --install build/desktop/Debug --component stt_model
+
 # Reinstall the tooling copies (.clang-*, cmake/tanh/, hooks/tanh/) from tooling/
 tooling-install:
     sh tooling/install.sh clang cmake hooks

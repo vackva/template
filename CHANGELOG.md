@@ -14,3 +14,26 @@ All notable changes to this project are documented here. The format follows
 - `on_tag.yml`: a `vX.Y.Z` tag runs every check in full and publishes per-platform packages.
 - Pull-request coverage gate: every changed `src/`/`include/` file needs >= 80% line coverage.
 - Claude Code setup: CLAUDE.md files, tanh-tools plugin via a local marketplace, protect/stop hooks, `add-processor` skill.
+- `tpl::stt::Transcriber`: offline speech-to-text with nvidia/parakeet-tdt-0.6b-v3 (int8 ONNX,
+  25 languages) over anira's ONNX Runtime; `tpl::stt::Vocabulary`, `tpl::stt::tdt_greedy_decode`,
+  `tpl::stt::default_model_dir()`.
+- `scripts/export-parakeet`: NeMo -> int8 ONNX export and the golden test transcripts; the model
+  lives in `models/` via Git LFS, CI restores it through `.github/actions/models-cache`.
+- `tpl-transcribe` example (`examples/transcribe_file`): transcribes a WAV file, prints the RTF.
+- anira v2.3.0 as a submodule (`third_party/anira`); options `TPL_WITH_STT`, `TPL_WITH_EXAMPLES`.
+
+- `tpl::stt::StreamingTranscriber`: the streaming backend (`SegmentSource`): resampling on the
+  audio thread (`Resampler`, `SpscRing`), Silero VAD v6.2.3 segmentation (`VadSegmenter`),
+  Parakeet per segment, words with sample times; one shared model per process.
+- `tpl::stt::Segment` / `SegmentSource`: the hand-off between the backend and its consumers.
+- `tpl_transcript`: `TranscriptStore` (SQLite, WAL, FTS5 search ignoring case and diacritics,
+  retention, crash recovery), `TranscriptionService` (sessions per Record/Stop, rollover),
+  `SegmentCache`, `RowIndex`, `ParagraphLayout`, txt/md/srt export, `Settings`
+  (`TPL_DATA_DIR` override), `ReplaySegmentSource`.
+- Transcriber app (`apps/transcriber`, JUCE 9.0.3): VST3/AU plugin and standalone app with
+  sessions sidebar, search, virtualised transcript view, settings panel; option `TPL_WITH_APP`,
+  presets `ci-app` / `windows-msvc-app`, app build rows in CI.
+
+### Changed
+
+- `tpl_add_test()` takes `SOURCES` and `LIBS`; coverage covers every `libtpl_*` library.

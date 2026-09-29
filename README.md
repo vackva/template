@@ -7,11 +7,15 @@ cosmos), with everything in this one repo: [tanh-tooling](https://github.com/tan
 is in `tooling/`, [ci-actions](https://github.com/tanh-lab/ci-actions) in `.github/`.
 
 The library is small on purpose: `tpl::dsp::Gain` and `tpl::dsp::OnePoleLowpass`, both real-time safe.
+`tpl::stt::Transcriber` adds offline speech-to-text (Parakeet TDT 0.6B v3, int8 ONNX, via
+[anira](https://github.com/anira-project/anira)'s ONNX Runtime), the first step towards a
+real-time transcription example.
 
 ## Quick start
 
 ```sh
-brew install cmake ninja llvm just jq    # or the apt equivalents
+brew install cmake ninja llvm just jq git-lfs    # or the apt equivalents
+git lfs install && git submodule update --init   # the model (670 MB, Git LFS) and anira
 just setup                               # arms the pre-push hook, configures build/desktop/Debug
 just test
 claude                                   # trust the folder, then: /plugin install tanh-tools@tanh-tooling
@@ -31,5 +35,6 @@ claude                                   # trust the folder, then: /plugin insta
 | [Tests](docs/testing.md) | GoogleTest, CTest, export check |
 | [Sanitizers](docs/sanitizers.md) | ASan/UBSan, TSan, RTSan and `TPL_NONBLOCKING` |
 | [Coverage and Codecov](docs/coverage.md) | llvm-cov, the per-file gate, `codecov.yml` |
-| [CI](docs/ci.md) | workflows, matrices, branch protection, releases |
+| [CI](docs/ci.md) | workflows, matrices, branch protection, releases, models in LFS |
+| [Speech-to-text](docs/stt.md) | `tpl_stt`, the Parakeet export, model files and install location |
 | [Shared tooling](docs/tooling.md) | `tooling/`, installed copies, CMake modules |

@@ -1,0 +1,17 @@
+[
+  {
+    "file": "en_librispeech_1272-128104-0000.wav",
+    "language": "en",
+    "reference": "mister quilter is the apostle of the middle classes and we are glad to welcome his gospel"
+  },
+  {
+    "file": "de_mls_4705_13109_000001.wav",
+    "language": "de",
+    "reference": "also bei ihren technischen kenntnissen und ihrer erfindungsgabe auf diesem gebiet glaubt der lord keinen besseren ingenieur und kapitän für sein weltschiff finden zu können als sie"
+  },
+  {
+    "file": "de_mls_4705_13109_000003.wav",
+    "language": "de",
+    "reference": "freut mich freut mich eine edle treue seele und ein gelungener mensch er befindet sich also immer noch in des lords diensten"
+  }
+]

@@ -47,6 +47,10 @@ on:
         description: "Newline-separated cache paths matching the key"
         type: string
         default: ""
+      models_lfs_include:
+        description: "git lfs pull --include pattern for models tracked in Git LFS: on a cache miss the coverage job pulls them and saves the cache (.github/actions/models-cache). Empty: restore only."
+        type: string
+        default: ""
 
 env:
   SCCACHE_GHA_ENABLED: "true"
@@ -71,13 +75,15 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-      - name: restore the model fixtures
+      - name: models
         if: inputs.models_cache_prefix != ''
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/models-cache
         with:
-          path: ${{ inputs.models_cache_paths }}
-          key: ${{ inputs.models_cache_prefix }}-${{ hashFiles(inputs.models_hash_glob) }}
-          enableCrossOsArchive: true
+          CACHE_PREFIX: ${{ inputs.models_cache_prefix }}
+          HASH_GLOB: ${{ inputs.models_hash_glob }}
+          PATHS: ${{ inputs.models_cache_paths }}
+          LFS_INCLUDE: ${{ inputs.models_lfs_include }}
+          SAVE: "true"
       - name: setup build tools
         uses: ./.github/actions/setup-cpp-build-tools
       # llvm-profdata/llvm-cov MUST match the clang that built the binaries —

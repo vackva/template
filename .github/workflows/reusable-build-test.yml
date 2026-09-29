@@ -5,12 +5,15 @@ name: build-test
 # config); the logic lives here once, in the repo it runs for.
 #
 # Matrix rows: { name, os, preset, args?, pr?, vcvars?, assert_grep?, dualarch?,
-#                build_only? }
+#                build_only?, apt? }
 #   pr: true      -> included in the pull_request tier (other events run all rows)
 #   vcvars        -> arch for ilammy/msvc-dev-cmd (Ninja needs cl.exe from vcvars)
 #   assert_grep   -> literal (grep -F) asserted in configure.log after the
 #                    build (e.g. a backend auto-disable warning); fails if absent
-#   build_only    -> cross-compiled leg: build, skip the test and assert steps
+#   build_only    -> build, skip the test and assert steps (cross-compiled legs,
+#                    the JUCE app legs)
+#   apt           -> extra Ubuntu packages installed before the build (JUCE's
+#                    ALSA / X11 / freetype headers for the app legs)
 #   multiarch     -> enable sccache's multi-arch caching on this leg (macOS
 #                    universal; adopt per leg on evidence — see cmake-build)
 #   dualarch      -> binaryDir leaf; after the native ctest run, every test_*
@@ -43,6 +46,10 @@ on:
         description: "Newline-separated cache paths matching the key"
         type: string
         default: ""
+      models_lfs_include:
+        description: "git lfs pull --include pattern for models tracked in Git LFS: on a cache miss the plan job pulls them and saves the cache (.github/actions/models-cache). Empty: restore only."
+        type: string
+        default: ""
 
 env:
   SCCACHE_GHA_ENABLED: "true"
@@ -56,6 +63,15 @@ jobs:
       matrix: ${{ steps.tier.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+      - name: models
+        if: inputs.models_cache_prefix != '' && inputs.models_lfs_include != ''
+        uses: ./.github/actions/models-cache
+        with:
+          CACHE_PREFIX: ${{ inputs.models_cache_prefix }}
+          HASH_GLOB: ${{ inputs.models_hash_glob }}
+          PATHS: ${{ inputs.models_cache_paths }}
+          LFS_INCLUDE: ${{ inputs.models_lfs_include }}
+          SAVE: "true"
       - name: select the tier
         id: tier
         shell: bash
@@ -84,20 +100,23 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-      - name: restore the model fixtures
+      - name: models
         if: inputs.models_cache_prefix != ''
-        id: models
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/models-cache
         with:
-          path: ${{ inputs.models_cache_paths }}
-          key: ${{ inputs.models_cache_prefix }}-${{ hashFiles(inputs.models_hash_glob) }}
-          enableCrossOsArchive: true
-      - name: note a fixture-cache miss
-        if: inputs.models_cache_prefix != '' && steps.models.outputs.cache-hit != 'true'
-        shell: bash
-        run: echo "models cache MISS — the configure fetches the pins itself" | tee -a "$GITHUB_STEP_SUMMARY"
+          CACHE_PREFIX: ${{ inputs.models_cache_prefix }}
+          HASH_GLOB: ${{ inputs.models_hash_glob }}
+          PATHS: ${{ inputs.models_cache_paths }}
+          LFS_INCLUDE: ${{ inputs.models_lfs_include }}
+          SAVE: "false"
       - name: setup build tools
         uses: ./.github/actions/setup-cpp-build-tools
+      - name: extra packages
+        if: matrix.apt && runner.os == 'Linux'
+        shell: bash
+        env:
+          PACKAGES: ${{ matrix.apt }}
+        run: sudo apt-get update && sudo apt-get install -y $PACKAGES
       # Ninja needs cl.exe and its headers/libs from a vcvars environment.
       - name: MSVC environment
         if: matrix.vcvars
